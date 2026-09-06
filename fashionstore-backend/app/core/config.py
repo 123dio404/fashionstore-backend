@@ -23,7 +23,12 @@ class Settings(BaseSettings):
         validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES",
         gt=0,
     )
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    cors_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:4200",
+            "http://127.0.0.1:4200",
+        ]
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
