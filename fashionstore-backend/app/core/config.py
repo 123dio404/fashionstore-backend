@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     app_name: str = "FashionStore API"
     environment: str = "development"
     database_url: str = Field(
-        default="sqlite:///./fashionstore.db",
+        default="postgresql+psycopg2://fashionstore:fashionstore@localhost:5433/fashionstore",
         validation_alias="DATABASE_URL",
     )
     secret_key: str = Field(

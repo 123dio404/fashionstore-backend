@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fashionstore-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fashionstore
+      POSTGRES_PASSWORD: fashionstore
+      POSTGRES_DB: fashionstore
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fashionstore -d fashionstore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

@@ -1,4 +1,3 @@
-from uuid import UUID
 from pydantic import BaseModel, Field
 from app.models.user import Role
 from app.schemas.common import ORMModel
@@ -24,8 +23,8 @@ class ProfileUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=8, max_length=128)
 
 class UserResponse(ORMModel):
-    id: UUID
+    id: int
     email: str
     full_name: str
-    role: Role
+    role: Role | None
     is_active: bool

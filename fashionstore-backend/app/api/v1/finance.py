@@ -1,4 +1,3 @@
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -40,17 +39,17 @@ def create_fee(data: FeeCreate, user: User = Depends(get_current_user), db: Sess
 
 
 @router.get('/fees/{fee_id}', response_model=FeeResponse)
-def get_fee(fee_id: UUID, db: Session = Depends(get_db)):
+def get_fee(fee_id: int, db: Session = Depends(get_db)):
     return finance_service.get_fee(db, fee_id)
 
 
 @router.patch('/fees/{fee_id}', response_model=FeeResponse, dependencies=[editor])
-def update_fee(fee_id: UUID, data: FeeUpdate, db: Session = Depends(get_db)):
+def update_fee(fee_id: int, data: FeeUpdate, db: Session = Depends(get_db)):
     return finance_service.update_fee(db, fee_id, data)
 
 
 @router.delete('/fees/{fee_id}', status_code=204, dependencies=[editor])
-def delete_fee(fee_id: UUID, db: Session = Depends(get_db)):
+def delete_fee(fee_id: int, db: Session = Depends(get_db)):
     finance_service.delete_fee(db, fee_id)
 
 
@@ -61,7 +60,7 @@ def pay_fee(data: PaymentCreate, user: User = Depends(get_current_user), db: Ses
 
 @router.get('/payments', response_model=list[PaymentResponse])
 def list_payments(
-    fee_id: UUID | None = None,
+    fee_id: int | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -83,7 +82,7 @@ def list_fines(user: User = Depends(get_current_user), db: Session = Depends(get
 
 
 @router.get('/fines/{fine_id}', response_model=FineResponse)
-def get_fine(fine_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_fine(fine_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     fine = finance_service.get_fine(db, fine_id)
     if user.role not in PRIVILEGED and fine.user_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
@@ -91,7 +90,7 @@ def get_fine(fine_id: UUID, user: User = Depends(get_current_user), db: Session 
 
 
 @router.patch('/fines/{fine_id}', response_model=FineResponse, dependencies=[editor])
-def update_fine(fine_id: UUID, data: FineUpdate, db: Session = Depends(get_db)):
+def update_fine(fine_id: int, data: FineUpdate, db: Session = Depends(get_db)):
     return finance_service.update_fine(db, fine_id, data)
 
 

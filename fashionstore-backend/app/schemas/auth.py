@@ -1,4 +1,3 @@
-from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 from app.models.user import Role
 from app.schemas.common import ORMModel
@@ -18,10 +17,10 @@ class TokenResponse(BaseModel):
     token_type: str = 'bearer'
 
 class UserResponse(ORMModel):
-    id: UUID
+    id: int
     email: str
     full_name: str
-    role: Role
+    role: Role | None
     is_active: bool
 
 LoginResponse.model_rebuild()

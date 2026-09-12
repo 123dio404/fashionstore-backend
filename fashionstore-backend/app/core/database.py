@@ -10,8 +10,10 @@ class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
 
 
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, pool_pre_ping=True, connect_args=connect_args)
+if not settings.database_url.startswith("postgresql"):
+    raise RuntimeError("El backend solo soporta PostgreSQL: configura DATABASE_URL con postgresql://...")
+
+engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, class_=Session, autoflush=False, expire_on_commit=False)
 
 

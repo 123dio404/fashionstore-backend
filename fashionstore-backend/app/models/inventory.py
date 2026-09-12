@@ -1,17 +1,13 @@
 import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
-from uuid import UUID, uuid4
-
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.branch import Branch
     from app.models.product import ProductVariant
-    from app.models.user import User
 
 
 class MovementType(str, enum.Enum):
@@ -23,27 +19,24 @@ class MovementType(str, enum.Enum):
 
 
 class Stock(Base):
-    __tablename__ = "stocks"
+    __tablename__ = "inventario"
     __table_args__ = (
-        UniqueConstraint("branch_id", "variant_id", name="uq_stock_branch_variant"),
-        CheckConstraint("physical_stock >= 0", name="ck_stock_physical_non_negative"),
-        CheckConstraint("reserved_stock >= 0", name="ck_stock_reserved_non_negative"),
-        CheckConstraint("reserved_stock <= physical_stock", name="ck_stock_reserved_lte_physical"),
+        UniqueConstraint("id_sucursal", "id_variante", name="uq_inventario_sucursal_variante"),
     )
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    branch_id: Mapped[UUID] = mapped_column(ForeignKey("branches.id", ondelete="CASCADE"), index=True)
-    variant_id: Mapped[UUID] = mapped_column(
-        ForeignKey("product_variants.id", ondelete="CASCADE"), index=True
-    )
-    physical_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    reserved_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    branch_id: Mapped[int] = mapped_column("id_sucursal", ForeignKey("sucursal.id", ondelete="RESTRICT"), index=True)
+    variant_id: Mapped[int] = mapped_column("id_variante", ForeignKey("producto_variante.id", ondelete="RESTRICT"), index=True)
+    size_id: Mapped[int | None] = mapped_column("id_talla", ForeignKey("tallas.id", ondelete="RESTRICT"), nullable=True, index=True)
+    physical_stock: Mapped[int] = mapped_column("stock_actual", Integer, default=0, nullable=False)
+    min_stock: Mapped[int] = mapped_column("stock_minimo", Integer, default=0, nullable=False)
+    reserved_stock: Mapped[int] = mapped_column("stock_reservado", Integer, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column("fecha_actualizacion", DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     branch: Mapped["Branch"] = relationship(back_populates="stocks")
     variant: Mapped["ProductVariant"] = relationship(back_populates="stocks")
+    size: Mapped["Size | None"] = relationship()
+    movements: Mapped[list["InventoryMovement"]] = relationship(back_populates="inventory")
 
     @property
     def available_stock(self) -> int:
@@ -51,27 +44,19 @@ class Stock(Base):
 
 
 class InventoryMovement(Base):
-    __tablename__ = "inventory_movements"
+    __tablename__ = "movimiento_inventario"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    inventory_id: Mapped[int] = mapped_column("id_inventario", ForeignKey("inventario.id", ondelete="RESTRICT"), index=True)
+    quantity: Mapped[int] = mapped_column("cantidad", Integer)
+    created_at: Mapped[datetime] = mapped_column("fecha", DateTime(timezone=True), server_default=func.now(), nullable=False)
+    reason: Mapped[str] = mapped_column("motivo", Text, default="")
     movement_type: Mapped[MovementType] = mapped_column(
-        Enum(MovementType, name="movement_type", native_enum=False), index=True
-    )
-    variant_id: Mapped[UUID] = mapped_column(ForeignKey("product_variants.id", ondelete="RESTRICT"))
-    source_branch_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("branches.id", ondelete="RESTRICT"), nullable=True
-    )
-    destination_branch_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("branches.id", ondelete="RESTRICT"), nullable=True
-    )
-    quantity: Mapped[int] = mapped_column(Integer)
-    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    performed_by_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        "tipo", Enum(MovementType, name="movement_type", native_enum=False), default=MovementType.AJUSTE, index=True
     )
 
-    variant: Mapped["ProductVariant"] = relationship()
-    source_branch: Mapped["Branch | None"] = relationship(foreign_keys=[source_branch_id])
-    destination_branch: Mapped["Branch | None"] = relationship(foreign_keys=[destination_branch_id])
-    performed_by: Mapped["User"] = relationship()
+    inventory: Mapped["Stock"] = relationship(back_populates="movements")
+
+    @property
+    def variant_id(self) -> int:
+        return self.inventory.variant_id

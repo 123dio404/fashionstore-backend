@@ -1,4 +1,3 @@
-from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,16 +10,16 @@ router=APIRouter(prefix='/inventory',tags=['inventory'])
 operator=Depends(require_role(Role.ADMINISTRADOR,Role.ENCARGADO))
 
 def stock_response(stock: Stock) -> StockResponse:
-    return StockResponse(id=stock.id,branch_id=stock.branch_id,variant_id=stock.variant_id,physical_stock=stock.physical_stock,reserved_stock=stock.reserved_stock,available_stock=stock.physical_stock-stock.reserved_stock)
+    return StockResponse(id=stock.id,branch_id=stock.branch_id,variant_id=stock.variant_id,size_id=stock.size_id,physical_stock=stock.physical_stock,reserved_stock=stock.reserved_stock,available_stock=stock.physical_stock-stock.reserved_stock)
 
 @router.get('/stock',response_model=list[StockResponse])
-def list_stock(branch_id: UUID|None=None, variant_id: UUID|None=None, db:Session=Depends(get_db)):
+def list_stock(branch_id: int|None=None, variant_id: int|None=None, db:Session=Depends(get_db)):
     query=select(Stock).order_by(Stock.updated_at)
     if branch_id: query=query.where(Stock.branch_id==branch_id)
     if variant_id: query=query.where(Stock.variant_id==variant_id)
     return [stock_response(x) for x in db.scalars(query).all()]
 @router.get('/stock/{stock_id}',response_model=StockResponse)
-def get_stock(stock_id:UUID,db:Session=Depends(get_db)):
+def get_stock(stock_id: int,db:Session=Depends(get_db)):
     obj=db.get(Stock,stock_id)
     if not obj: raise HTTPException(404,'Stock not found')
     return stock_response(obj)
@@ -53,8 +52,8 @@ def transfer(data:TransferRequest,db:Session=Depends(get_db),current:User=Depend
 def transfer_alias(data:TransferRequest,db:Session=Depends(get_db),current:User=Depends(get_current_user)):
     return transfer_stock(db,data,current.id)
 @router.get('/movements',response_model=list[MovementResponse])
-def movements(variant_id:UUID|None=None, branch_id:UUID|None=None, db:Session=Depends(get_db)):
-    query=select(InventoryMovement).order_by(InventoryMovement.created_at.desc())
-    if variant_id: query=query.where(InventoryMovement.variant_id==variant_id)
-    if branch_id: query=query.where((InventoryMovement.source_branch_id==branch_id)|(InventoryMovement.destination_branch_id==branch_id))
+def movements(variant_id: int|None=None, branch_id: int|None=None, db:Session=Depends(get_db)):
+    query = select(InventoryMovement).join(Stock, Stock.id == InventoryMovement.inventory_id).order_by(InventoryMovement.created_at.desc())
+    if variant_id: query = query.where(Stock.variant_id == variant_id)
+    if branch_id: query = query.where(Stock.branch_id == branch_id)
     return list(db.scalars(query).all())

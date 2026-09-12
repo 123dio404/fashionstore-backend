@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 from decimal import Decimal
-from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -27,7 +26,7 @@ from app.schemas.finance import (
 )
 
 
-def get_fee(db: Session, fee_id: UUID) -> Fee:
+def get_fee(db: Session, fee_id: int) -> Fee:
     fee = db.get(Fee, fee_id)
     if fee is None:
         raise HTTPException(404, "Fee not found")
@@ -43,7 +42,7 @@ def list_fees(db: Session, fee_type: FeeType | None = None, period: str | None =
     return list(db.scalars(q).all())
 
 
-def create_fee(db: Session, data: FeeCreate, user_id: UUID) -> Fee:
+def create_fee(db: Session, data: FeeCreate, user_id: int) -> Fee:
     fee = Fee(**data.model_dump(), created_by_id=user_id)
     db.add(fee)
     db.commit()
@@ -51,7 +50,7 @@ def create_fee(db: Session, data: FeeCreate, user_id: UUID) -> Fee:
     return fee
 
 
-def update_fee(db: Session, fee_id: UUID, data: FeeUpdate) -> Fee:
+def update_fee(db: Session, fee_id: int, data: FeeUpdate) -> Fee:
     fee = get_fee(db, fee_id)
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(fee, k, v)
@@ -60,13 +59,13 @@ def update_fee(db: Session, fee_id: UUID, data: FeeUpdate) -> Fee:
     return fee
 
 
-def delete_fee(db: Session, fee_id: UUID) -> None:
+def delete_fee(db: Session, fee_id: int) -> None:
     fee = get_fee(db, fee_id)
     db.delete(fee)
     db.commit()
 
 
-def process_payment(db: Session, data: PaymentCreate, user_id: UUID) -> Payment:
+def process_payment(db: Session, data: PaymentCreate, user_id: int) -> Payment:
     fee = get_fee(db, data.fee_id)
     collected = sum(p.amount for p in fee.payments if p.status == PaymentStatus.COMPLETADO)
     pending = float(Decimal(str(fee.amount)) - Decimal(str(collected)))
@@ -81,14 +80,14 @@ def process_payment(db: Session, data: PaymentCreate, user_id: UUID) -> Payment:
     )
     db.add(payment)
     db.flush()
-    payment.reference = f"PAY-{payment.id.hex[:12].upper()}"
+    payment.reference = f"PAY-{payment.id:012d}"
     payment.paid_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(payment)
     return payment
 
 
-def list_payments(db: Session, fee_id: UUID | None = None, user_id: UUID | None = None) -> list[Payment]:
+def list_payments(db: Session, fee_id: int | None = None, user_id: int | None = None) -> list[Payment]:
     q = select(Payment).order_by(Payment.created_at.desc(), Payment.id)
     if fee_id is not None:
         q = q.where(Payment.fee_id == fee_id)
@@ -97,7 +96,7 @@ def list_payments(db: Session, fee_id: UUID | None = None, user_id: UUID | None 
     return list(db.scalars(q).all())
 
 
-def get_fine(db: Session, fine_id: UUID) -> Fine:
+def get_fine(db: Session, fine_id: int) -> Fine:
     fine = db.get(Fine, fine_id)
     if fine is None:
         raise HTTPException(404, "Fine not found")
@@ -116,7 +115,7 @@ def create_fine(db: Session, data: FineCreate) -> Fine:
     return fine
 
 
-def update_fine(db: Session, fine_id: UUID, data: FineUpdate) -> Fine:
+def update_fine(db: Session, fine_id: int, data: FineUpdate) -> Fine:
     fine = get_fine(db, fine_id)
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(fine, k, v)
@@ -129,7 +128,7 @@ def update_fine(db: Session, fine_id: UUID, data: FineUpdate) -> Fine:
     return fine
 
 
-def list_fines(db: Session, user_id: UUID | None = None) -> list[Fine]:
+def list_fines(db: Session, user_id: int | None = None) -> list[Fine]:
     q = select(Fine).order_by(Fine.issued_at.desc(), Fine.id)
     if user_id is not None:
         q = q.where(Fine.user_id == user_id)

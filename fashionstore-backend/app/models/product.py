@@ -1,11 +1,8 @@
-from datetime import datetime
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
-from uuid import UUID, uuid4
-
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from app.core.database import Base
 
 if TYPE_CHECKING:
@@ -14,83 +11,69 @@ if TYPE_CHECKING:
 
 
 class Category(Base):
-    __tablename__ = "categories"
+    __tablename__ = "categoria"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column("nombre", String(100), unique=True, index=True)
 
     products: Mapped[list["Product"]] = relationship(back_populates="category")
 
 
 class Season(Base):
-    __tablename__ = "seasons"
+    __tablename__ = "temporada"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    products: Mapped[list["Product"]] = relationship(back_populates="season")
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column("nombre", String(100), unique=True, index=True)
+    start_date: Mapped[date] = mapped_column("fecha_inicio", Date)
+    end_date: Mapped[date] = mapped_column("fecha_fin", Date)
 
 
 class Size(Base):
-    __tablename__ = "sizes"
+    __tablename__ = "tallas"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    name: Mapped[str] = mapped_column(String(30), unique=True)
-
-    variants: Mapped[list["ProductVariant"]] = relationship(back_populates="size")
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column("nombre", String(20), unique=True)
 
 
 class Color(Base):
-    __tablename__ = "colors"
+    __tablename__ = "color"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    name: Mapped[str] = mapped_column(String(50), unique=True)
-    hex_code: Mapped[str] = mapped_column(String(7))
-
-    variants: Mapped[list["ProductVariant"]] = relationship(back_populates="color")
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column("nombre", String(50), unique=True)
 
 
 class Product(Base):
-    __tablename__ = "products"
+    __tablename__ = "producto"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    category_id: Mapped[UUID] = mapped_column(ForeignKey("categories.id", ondelete="RESTRICT"))
-    season_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("seasons.id", ondelete="SET NULL"), nullable=True
-    )
-    supplier_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True
-    )
-    name: Mapped[str] = mapped_column(String(150), index=True)
-    sku: Mapped[str] = mapped_column(String(50), unique=True, index=True)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    technical_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
-    model_3d_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    category_id: Mapped[int] = mapped_column("id_categoria", ForeignKey("categoria.id", ondelete="RESTRICT"))
+    name: Mapped[str] = mapped_column("nombre", String(150), index=True)
+    brand: Mapped[str | None] = mapped_column("marca", String(100), nullable=True)
+    price: Mapped[Decimal] = mapped_column("precio", Numeric(12, 2))
+    is_active: Mapped[bool] = mapped_column("estado", Boolean, default=True, nullable=False)
 
     category: Mapped["Category"] = relationship(back_populates="products")
-    season: Mapped["Season | None"] = relationship(back_populates="products")
-    supplier: Mapped["Supplier | None"] = relationship(back_populates="products")
+    suppliers: Mapped[list["Supplier"]] = relationship(secondary="producto_proveedor", back_populates="products")
     variants: Mapped[list["ProductVariant"]] = relationship(
         back_populates="product", cascade="all, delete-orphan"
     )
 
 
 class ProductVariant(Base):
-    __tablename__ = "product_variants"
-    __table_args__ = (UniqueConstraint("product_id", "size_id", "color_id", name="uq_product_variant"),)
+    __tablename__ = "producto_variante"
+    __table_args__ = (
+        UniqueConstraint("id_producto", "id_talla", "id_color", name="uq_product_variant"),
+    )
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    product_id: Mapped[UUID] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
-    size_id: Mapped[UUID] = mapped_column(ForeignKey("sizes.id", ondelete="RESTRICT"))
-    color_id: Mapped[UUID] = mapped_column(ForeignKey("colors.id", ondelete="RESTRICT"))
-    barcode: Mapped[str | None] = mapped_column(String(80), unique=True, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    product_id: Mapped[int] = mapped_column("id_producto", ForeignKey("producto.id", ondelete="CASCADE"))
+    codigo: Mapped[str] = mapped_column("codigo", String(50), unique=True)
+    price: Mapped[Decimal] = mapped_column("precio", Numeric(12, 2))
+    is_active: Mapped[bool] = mapped_column("estado", Boolean, default=True, nullable=False)
+    size_id: Mapped[int | None] = mapped_column("id_talla", ForeignKey("tallas.id", ondelete="RESTRICT"), nullable=True)
+    color_id: Mapped[int | None] = mapped_column("id_color", ForeignKey("color.id", ondelete="RESTRICT"), nullable=True)
 
     product: Mapped["Product"] = relationship(back_populates="variants")
-    size: Mapped["Size"] = relationship(back_populates="variants")
-    color: Mapped["Color"] = relationship(back_populates="variants")
+    size: Mapped["Size | None"] = relationship()
+    color: Mapped["Color | None"] = relationship()
     stocks: Mapped[list["Stock"]] = relationship(back_populates="variant")

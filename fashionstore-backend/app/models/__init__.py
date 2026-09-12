@@ -1,4 +1,4 @@
-from app.models.branch import Branch, City
+from app.models.branch import Branch, BranchHour, City
 from app.models.commerce import (
     Cart,
     CartItem,
@@ -19,11 +19,12 @@ from app.models.operations import (
     TaskStatus,
 )
 from app.models.product import Category, Color, Product, ProductVariant, Season, Size
-from app.models.supplier import Supplier
-from app.models.user import Role, User
+from app.models.supplier import ProductSupplier, Supplier
+from app.models.user import Role, Rol, User, UsuarioRol
 
 __all__ = [
     "Branch",
+    "BranchHour",
     "Cart",
     "CartItem",
     "Category",
@@ -44,10 +45,12 @@ __all__ = [
     "PaymentStatus",
     "Priority",
     "Product",
+    "ProductSupplier",
     "ProductVariant",
     "Reservation",
     "ReservationItem",
     "Role",
+    "Rol",
     "Sale",
     "SaleItem",
     "SalePayment",
@@ -57,4 +60,5 @@ __all__ = [
     "Supplier",
     "TaskStatus",
     "User",
+    "UsuarioRol",
 ]

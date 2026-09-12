@@ -1,8 +1,6 @@
 import enum
 from datetime import date as DateType, datetime, time
 from decimal import Decimal
-from uuid import UUID
-
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ORMModel
@@ -35,7 +33,7 @@ class ReservationStatus(str, enum.Enum):
 
 
 class CartItemRequest(BaseModel):
-    stock_id: UUID
+    stock_id: int
     quantity: int = Field(gt=0)
 
 
@@ -44,50 +42,50 @@ class CartItemUpdate(BaseModel):
 
 
 class CartItemResponse(BaseModel):
-    id: UUID
-    stock_id: UUID
+    id: int
+    stock_id: int
     quantity: int
     price: Decimal
-    variant_id: UUID
-    product_id: UUID
+    variant_id: int
+    product_id: int
     product_name: str
     size: str | None = None
     color: str | None = None
 
 
 class CartResponse(BaseModel):
-    id: UUID
+    id: int
     status: CartStatus
     items: list[CartItemResponse]
     total: Decimal
 
 
 class CheckoutRequest(BaseModel):
-    branch_id: UUID
+    branch_id: int
 
 
 class SaleItemInput(BaseModel):
-    stock_id: UUID
+    stock_id: int
     quantity: int = Field(gt=0)
 
 
 class PosSaleCreate(BaseModel):
-    branch_id: UUID
-    client_id: UUID | None = None
+    branch_id: int
+    client_id: int
     items: list[SaleItemInput] = Field(min_length=1)
     paid: bool = True
 
 
 class SaleItemResponse(ORMModel):
-    id: UUID
-    stock_id: UUID
+    id: int
+    stock_id: int
     quantity: int
     unit_price: Decimal
 
 
 class SalePaymentResponse(ORMModel):
-    id: UUID
-    sale_id: UUID
+    id: int
+    sale_id: int
     amount: Decimal
     status: PaymentStatus
     paid_at: datetime | None
@@ -95,10 +93,10 @@ class SalePaymentResponse(ORMModel):
 
 
 class SaleResponse(ORMModel):
-    id: UUID
-    client_id: UUID | None
-    user_id: UUID
-    branch_id: UUID
+    id: int
+    client_id: int
+    user_id: int | None
+    branch_id: int
     sale_date: datetime
     total: Decimal
     sale_type: SaleType
@@ -107,12 +105,12 @@ class SaleResponse(ORMModel):
 
 
 class ReservationItemInput(BaseModel):
-    stock_id: UUID
+    stock_id: int
     quantity: int = Field(gt=0)
 
 
 class ReservationCreate(BaseModel):
-    branch_id: UUID
+    branch_id: int
     reservation_date: DateType
     reservation_time: time
     items: list[ReservationItemInput] = Field(min_length=1)
@@ -125,15 +123,15 @@ class ReservationUpdate(BaseModel):
 
 
 class ReservationItemResponse(ORMModel):
-    id: UUID
-    stock_id: UUID
+    id: int
+    stock_id: int
     quantity: int
 
 
 class ReservationResponse(ORMModel):
-    id: UUID
-    client_id: UUID
-    branch_id: UUID
+    id: int
+    client_id: int
+    branch_id: int
     reservation_date: DateType
     reservation_time: time
     status: ReservationStatus

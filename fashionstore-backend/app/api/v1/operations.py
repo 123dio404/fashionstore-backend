@@ -1,5 +1,4 @@
 from datetime import date
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -39,28 +38,28 @@ def create_facility(data: FacilityCreate, user: User = Depends(get_current_user)
 
 
 @router.get('/facilities/{facility_id}', response_model=FacilityResponse)
-def get_facility(facility_id: UUID, db: Session = Depends(get_db)):
+def get_facility(facility_id: int, db: Session = Depends(get_db)):
     return operations_service.get_facility(db, facility_id)
 
 
 @router.patch('/facilities/{facility_id}', response_model=FacilityResponse, dependencies=[manager])
-def update_facility(facility_id: UUID, data: FacilityUpdate, db: Session = Depends(get_db)):
+def update_facility(facility_id: int, data: FacilityUpdate, db: Session = Depends(get_db)):
     return operations_service.update_facility(db, facility_id, data)
 
 
 @router.delete('/facilities/{facility_id}', status_code=204, dependencies=[manager])
-def delete_facility(facility_id: UUID, db: Session = Depends(get_db)):
+def delete_facility(facility_id: int, db: Session = Depends(get_db)):
     operations_service.delete_facility(db, facility_id)
 
 
 @router.get('/facilities/{facility_id}/availability', response_model=AvailabilityResponse)
-def get_availability(facility_id: UUID, date: date, db: Session = Depends(get_db)):
+def get_availability(facility_id: int, date: date, db: Session = Depends(get_db)):
     return operations_service.check_availability(db, facility_id, date)
 
 
 @router.get('/reservations', response_model=list[FacilityReservationResponse])
 def list_reservations(
-    facility_id: UUID | None = None,
+    facility_id: int | None = None,
     day: date | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -79,7 +78,7 @@ def create_reservation(
 
 @router.patch('/reservations/{reservation_id}', response_model=FacilityReservationResponse)
 def update_reservation(
-    reservation_id: UUID,
+    reservation_id: int,
     data: FacilityReservationUpdate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -92,7 +91,7 @@ def update_reservation(
 
 @router.delete('/reservations/{reservation_id}', status_code=204)
 def delete_reservation(
-    reservation_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    reservation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     reservation = operations_service.get_reservation(db, reservation_id)
     if reservation.user_id != user.id and user.role not in PRIVILEGED:
@@ -104,8 +103,8 @@ def delete_reservation(
 def list_tasks(
     status: TaskStatus | None = None,
     priority: Priority | None = None,
-    facility_id: UUID | None = None,
-    assignee_id: UUID | None = None,
+    facility_id: int | None = None,
+    assignee_id: int | None = None,
     db: Session = Depends(get_db),
 ):
     return operations_service.list_tasks(db, status, priority, facility_id, assignee_id)
@@ -117,12 +116,12 @@ def create_task(data: MaintenanceCreate, user: User = Depends(get_current_user),
 
 
 @router.patch('/maintenance/tasks/{task_id}', response_model=MaintenanceResponse, dependencies=[manager])
-def update_task(task_id: UUID, data: MaintenanceUpdate, db: Session = Depends(get_db)):
+def update_task(task_id: int, data: MaintenanceUpdate, db: Session = Depends(get_db)):
     return operations_service.update_task(db, task_id, data)
 
 
 @router.delete('/maintenance/tasks/{task_id}', status_code=204, dependencies=[manager])
-def delete_task(task_id: UUID, db: Session = Depends(get_db)):
+def delete_task(task_id: int, db: Session = Depends(get_db)):
     operations_service.delete_task(db, task_id)
 
 

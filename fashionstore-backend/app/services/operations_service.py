@@ -1,5 +1,4 @@
 from datetime import date, datetime, time, timedelta, timezone
-from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -31,7 +30,7 @@ from app.schemas.operations import (
 ACTIVE_STATUSES = (FacilityReservationStatus.PENDIENTE, FacilityReservationStatus.CONFIRMADA, FacilityReservationStatus.COMPLETADA)
 
 
-def get_facility(db: Session, facility_id: UUID) -> Facility:
+def get_facility(db: Session, facility_id: int) -> Facility:
     facility = db.get(Facility, facility_id)
     if facility is None:
         raise HTTPException(404, "Facility not found")
@@ -45,7 +44,7 @@ def list_facilities(db: Session, active_only: bool = False) -> list[Facility]:
     return list(db.scalars(q).all())
 
 
-def create_facility(db: Session, data: FacilityCreate, user_id: UUID) -> Facility:
+def create_facility(db: Session, data: FacilityCreate, user_id: int) -> Facility:
     facility = Facility(**data.model_dump(), created_by_id=user_id)
     db.add(facility)
     try:
@@ -57,7 +56,7 @@ def create_facility(db: Session, data: FacilityCreate, user_id: UUID) -> Facilit
         raise HTTPException(409, "Facility name already exists")
 
 
-def update_facility(db: Session, facility_id: UUID, data: FacilityUpdate) -> Facility:
+def update_facility(db: Session, facility_id: int, data: FacilityUpdate) -> Facility:
     facility = get_facility(db, facility_id)
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(facility, k, v)
@@ -70,7 +69,7 @@ def update_facility(db: Session, facility_id: UUID, data: FacilityUpdate) -> Fac
         raise HTTPException(409, "Facility name already exists")
 
 
-def delete_facility(db: Session, facility_id: UUID) -> None:
+def delete_facility(db: Session, facility_id: int) -> None:
     facility = get_facility(db, facility_id)
     db.delete(facility)
     db.commit()
@@ -92,7 +91,7 @@ def _overlaps(start: time, end: time, r: FacilityReservation) -> bool:
     return r.start_time < end and r.end_time > start
 
 
-def check_availability(db: Session, facility_id: UUID, day: date) -> AvailabilityResponse:
+def check_availability(db: Session, facility_id: int, day: date) -> AvailabilityResponse:
     facility = get_facility(db, facility_id)
     reservations = list(
         db.scalars(
@@ -125,7 +124,7 @@ def check_availability(db: Session, facility_id: UUID, day: date) -> Availabilit
     )
 
 
-def create_reservation(db: Session, data: FacilityReservationCreate, user_id: UUID) -> FacilityReservation:
+def create_reservation(db: Session, data: FacilityReservationCreate, user_id: int) -> FacilityReservation:
     facility = get_facility(db, data.facility_id)
     if not facility.is_active:
         raise HTTPException(400, "Facility is not active")
@@ -161,7 +160,7 @@ def create_reservation(db: Session, data: FacilityReservationCreate, user_id: UU
     return reservation
 
 
-def get_reservation(db: Session, reservation_id: UUID) -> FacilityReservation:
+def get_reservation(db: Session, reservation_id: int) -> FacilityReservation:
     reservation = db.get(FacilityReservation, reservation_id)
     if reservation is None:
         raise HTTPException(404, "Reservation not found")
@@ -170,9 +169,9 @@ def get_reservation(db: Session, reservation_id: UUID) -> FacilityReservation:
 
 def list_reservations(
     db: Session,
-    facility_id: UUID | None = None,
+    facility_id: int | None = None,
     day: date | None = None,
-    user_id: UUID | None = None,
+    user_id: int | None = None,
 ) -> list[FacilityReservation]:
     q = select(FacilityReservation).order_by(FacilityReservation.date.desc(), FacilityReservation.start_time)
     if facility_id is not None:
@@ -184,7 +183,7 @@ def list_reservations(
     return list(db.scalars(q).all())
 
 
-def update_reservation(db: Session, reservation_id: UUID, data: FacilityReservationUpdate) -> FacilityReservation:
+def update_reservation(db: Session, reservation_id: int, data: FacilityReservationUpdate) -> FacilityReservation:
     reservation = get_reservation(db, reservation_id)
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(reservation, k, v)
@@ -193,20 +192,20 @@ def update_reservation(db: Session, reservation_id: UUID, data: FacilityReservat
     return reservation
 
 
-def delete_reservation(db: Session, reservation_id: UUID) -> None:
+def delete_reservation(db: Session, reservation_id: int) -> None:
     reservation = get_reservation(db, reservation_id)
     db.delete(reservation)
     db.commit()
 
 
-def get_task(db: Session, task_id: UUID) -> MaintenanceTask:
+def get_task(db: Session, task_id: int) -> MaintenanceTask:
     task = db.get(MaintenanceTask, task_id)
     if task is None:
         raise HTTPException(404, "Maintenance task not found")
     return task
 
 
-def create_task(db: Session, data: MaintenanceCreate, user_id: UUID) -> MaintenanceTask:
+def create_task(db: Session, data: MaintenanceCreate, user_id: int) -> MaintenanceTask:
     if data.facility_id is not None and db.get(Facility, data.facility_id) is None:
         raise HTTPException(404, "Facility not found")
     if data.assignee_id is not None and db.get(User, data.assignee_id) is None:
@@ -222,8 +221,8 @@ def list_tasks(
     db: Session,
     status: TaskStatus | None = None,
     priority: Priority | None = None,
-    facility_id: UUID | None = None,
-    assignee_id: UUID | None = None,
+    facility_id: int | None = None,
+    assignee_id: int | None = None,
 ) -> list[MaintenanceTask]:
     q = select(MaintenanceTask).order_by(MaintenanceTask.scheduled_date.asc().nulls_last(), MaintenanceTask.created_at.desc())
     if status is not None:
@@ -237,7 +236,7 @@ def list_tasks(
     return list(db.scalars(q).all())
 
 
-def update_task(db: Session, task_id: UUID, data: MaintenanceUpdate) -> MaintenanceTask:
+def update_task(db: Session, task_id: int, data: MaintenanceUpdate) -> MaintenanceTask:
     task = get_task(db, task_id)
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(task, k, v)
@@ -250,7 +249,7 @@ def update_task(db: Session, task_id: UUID, data: MaintenanceUpdate) -> Maintena
     return task
 
 
-def delete_task(db: Session, task_id: UUID) -> None:
+def delete_task(db: Session, task_id: int) -> None:
     task = get_task(db, task_id)
     db.delete(task)
     db.commit()
@@ -275,7 +274,7 @@ def facility_usage_report(db: Session, period: str) -> FacilityUsageResponse:
     )
     facilities = {f.id: f for f in list_facilities(db)}
 
-    by_facility: dict[UUID, list[FacilityReservation]] = {}
+    by_facility: dict[int, list[FacilityReservation]] = {}
     for r in reservations:
         by_facility.setdefault(r.facility_id, []).append(r)
 

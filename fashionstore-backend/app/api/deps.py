@@ -1,5 +1,4 @@
 from collections.abc import Callable, Generator
-from uuid import UUID
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -21,7 +20,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         payload = decode_access_token(token)
         subject = payload.get('sub')
         if not subject: raise credentials_error
-        user_id = UUID(str(subject))
+        user_id = int(subject)
     except (JWTError, ValueError, TypeError):
         raise credentials_error
     user = db.get(User, user_id)
@@ -32,7 +31,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 def require_role(*roles: Role | str) -> Callable:
     allowed = {r.value if isinstance(r, Role) else str(r) for r in roles}
     def dependency(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role.value not in allowed and current_user.role not in allowed:
+        user_role = current_user.role
+        if user_role is None or (user_role.value not in allowed and user_role not in allowed):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Insufficient permissions')
         return current_user
     return dependency

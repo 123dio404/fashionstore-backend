@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 from decimal import Decimal
-from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -29,14 +28,14 @@ from app.schemas.commerce import (
 )
 
 
-def _stock(db: Session, stock_id: UUID) -> Stock:
+def _stock(db: Session, stock_id: int) -> Stock:
     stock = db.get(Stock, stock_id)
     if stock is None:
         raise HTTPException(404, "Stock record not found")
     return stock
 
 
-def get_or_create_cart(db: Session, user_id: UUID) -> Cart:
+def get_or_create_cart(db: Session, user_id: int) -> Cart:
     cart = db.scalar(
         select(Cart)
         .where(Cart.user_id == user_id, Cart.status == "activo")
@@ -51,7 +50,7 @@ def get_or_create_cart(db: Session, user_id: UUID) -> Cart:
     return cart
 
 
-def get_cart(db: Session, user_id: UUID) -> CartResponse:
+def get_cart(db: Session, user_id: int) -> CartResponse:
     cart = get_or_create_cart(db, user_id)
     items: list[CartItemResponse] = []
     total = Decimal("0")
@@ -75,7 +74,7 @@ def get_cart(db: Session, user_id: UUID) -> CartResponse:
     return CartResponse(id=cart.id, status=cart.status, items=items, total=total)
 
 
-def add_to_cart(db: Session, user_id: UUID, data: CartItemRequest) -> CartResponse:
+def add_to_cart(db: Session, user_id: int, data: CartItemRequest) -> CartResponse:
     stock = _stock(db, data.stock_id)
     available = stock.physical_stock - stock.reserved_stock
     if available <= 0:
@@ -95,7 +94,7 @@ def add_to_cart(db: Session, user_id: UUID, data: CartItemRequest) -> CartRespon
     return get_cart(db, user_id)
 
 
-def update_cart_item(db: Session, user_id: UUID, item_id: UUID, quantity: int) -> CartResponse:
+def update_cart_item(db: Session, user_id: int, item_id: int, quantity: int) -> CartResponse:
     cart = get_or_create_cart(db, user_id)
     item = next((i for i in cart.items if i.id == item_id), None)
     if item is None:
@@ -107,7 +106,7 @@ def update_cart_item(db: Session, user_id: UUID, item_id: UUID, quantity: int) -
     return get_cart(db, user_id)
 
 
-def remove_cart_item(db: Session, user_id: UUID, item_id: UUID) -> CartResponse:
+def remove_cart_item(db: Session, user_id: int, item_id: int) -> CartResponse:
     cart = get_or_create_cart(db, user_id)
     item = next((i for i in cart.items if i.id == item_id), None)
     if item is None:
@@ -117,7 +116,7 @@ def remove_cart_item(db: Session, user_id: UUID, item_id: UUID) -> CartResponse:
     return get_cart(db, user_id)
 
 
-def checkout(db: Session, user_id: UUID, data: CheckoutRequest) -> Sale:
+def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
     if db.get(Branch, data.branch_id) is None:
         raise HTTPException(404, "Branch not found")
     cart = get_or_create_cart(db, user_id)
@@ -135,11 +134,9 @@ def checkout(db: Session, user_id: UUID, data: CheckoutRequest) -> Sale:
         db.add(
             InventoryMovement(
                 movement_type=MovementType.VENTA,
-                variant_id=ci.stock.variant_id,
-                destination_branch_id=data.branch_id,
+                inventory_id=ci.stock.id,
                 quantity=-ci.quantity,
                 reason="Venta digital",
-                performed_by_id=user_id,
             )
         )
     db.add(sale)
@@ -149,7 +146,7 @@ def checkout(db: Session, user_id: UUID, data: CheckoutRequest) -> Sale:
             amount=total,
             status="completado",
             paid_at=datetime.now(timezone.utc),
-            reference=f"ORD-{sale.id.hex[:12].upper()}",
+            reference=f"ORD-{sale.id:012d}",
         )
     )
     cart.status = "completado"
@@ -158,24 +155,24 @@ def checkout(db: Session, user_id: UUID, data: CheckoutRequest) -> Sale:
     return sale
 
 
-def get_sale(db: Session, sale_id: UUID) -> Sale:
+def get_sale(db: Session, sale_id: int) -> Sale:
     sale = db.get(Sale, sale_id)
     if sale is None:
         raise HTTPException(404, "Sale not found")
     return sale
 
 
-def list_sales(db: Session, client_id: UUID | None = None) -> list[Sale]:
+def list_sales(db: Session, client_id: int | None = None) -> list[Sale]:
     q = select(Sale).order_by(Sale.sale_date.desc(), Sale.id)
     if client_id is not None:
         q = q.where(Sale.client_id == client_id)
     return list(db.scalars(q).all())
 
 
-def pos_sale(db: Session, user_id: UUID, data: PosSaleCreate) -> Sale:
+def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
     if db.get(Branch, data.branch_id) is None:
         raise HTTPException(404, "Branch not found")
-    if data.client_id is not None and db.get(User, data.client_id) is None:
+    if db.get(User, data.client_id) is None:
         raise HTTPException(404, "Client not found")
     total = Decimal("0")
     entries = []
@@ -195,11 +192,9 @@ def pos_sale(db: Session, user_id: UUID, data: PosSaleCreate) -> Sale:
         db.add(
             InventoryMovement(
                 movement_type=MovementType.VENTA,
-                variant_id=stock.variant_id,
-                destination_branch_id=data.branch_id,
+                inventory_id=stock.id,
                 quantity=-quantity,
                 reason="Venta POS",
-                performed_by_id=user_id,
             )
         )
     db.add(sale)
@@ -210,7 +205,7 @@ def pos_sale(db: Session, user_id: UUID, data: PosSaleCreate) -> Sale:
                 amount=total,
                 status="completado",
                 paid_at=datetime.now(timezone.utc),
-                reference=f"POS-{sale.id.hex[:12].upper()}",
+                reference=f"POS-{sale.id:012d}",
             )
         )
     db.commit()
@@ -218,7 +213,7 @@ def pos_sale(db: Session, user_id: UUID, data: PosSaleCreate) -> Sale:
     return sale
 
 
-def create_reservation(db: Session, user_id: UUID, data: ReservationCreate) -> Reservation:
+def create_reservation(db: Session, user_id: int, data: ReservationCreate) -> Reservation:
     if db.get(Branch, data.branch_id) is None:
         raise HTTPException(404, "Branch not found")
     entries = []
@@ -240,11 +235,9 @@ def create_reservation(db: Session, user_id: UUID, data: ReservationCreate) -> R
         db.add(
             InventoryMovement(
                 movement_type=MovementType.RESERVA,
-                variant_id=stock.variant_id,
-                destination_branch_id=data.branch_id,
+                inventory_id=stock.id,
                 quantity=quantity,
                 reason="Reserva probador",
-                performed_by_id=user_id,
             )
         )
     db.add(reservation)
@@ -253,7 +246,7 @@ def create_reservation(db: Session, user_id: UUID, data: ReservationCreate) -> R
     return reservation
 
 
-def get_reservation(db: Session, reservation_id: UUID) -> Reservation:
+def get_reservation(db: Session, reservation_id: int) -> Reservation:
     reservation = db.get(Reservation, reservation_id)
     if reservation is None:
         raise HTTPException(404, "Reservation not found")
@@ -262,9 +255,9 @@ def get_reservation(db: Session, reservation_id: UUID) -> Reservation:
 
 def list_reservations(
     db: Session,
-    client_id: UUID | None = None,
+    client_id: int | None = None,
     status: str | None = None,
-    branch_id: UUID | None = None,
+    branch_id: int | None = None,
     reservation_date=None,
 ) -> list[Reservation]:
     q = select(Reservation).order_by(Reservation.reservation_date.desc(), Reservation.reservation_time)
@@ -287,16 +280,14 @@ def _release_reserved(db: Session, reservation: Reservation) -> None:
             db.add(
                 InventoryMovement(
                     movement_type=MovementType.RESERVA,
-                    variant_id=stock.variant_id,
-                    destination_branch_id=reservation.branch_id,
+                    inventory_id=stock.id,
                     quantity=-item.quantity,
                     reason="Liberación reserva",
-                    performed_by_id=reservation.client_id,
                 )
             )
 
 
-def update_reservation(db: Session, reservation_id: UUID, data: ReservationUpdate) -> Reservation:
+def update_reservation(db: Session, reservation_id: int, data: ReservationUpdate) -> Reservation:
     reservation = get_reservation(db, reservation_id)
     values = data.model_dump(exclude_unset=True)
     new_status = values.pop("status", None)
@@ -312,7 +303,7 @@ def update_reservation(db: Session, reservation_id: UUID, data: ReservationUpdat
     return reservation
 
 
-def delete_reservation(db: Session, reservation_id: UUID) -> None:
+def delete_reservation(db: Session, reservation_id: int) -> None:
     reservation = get_reservation(db, reservation_id)
     if reservation.status not in ("cancelada", "completada"):
         _release_reserved(db, reservation)

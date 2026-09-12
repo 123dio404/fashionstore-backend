@@ -1,5 +1,4 @@
 from datetime import date as DateType
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -39,7 +38,7 @@ def add_cart_item(
 
 @router.patch('/cart/items/{item_id}', response_model=CartResponse)
 def edit_cart_item(
-    item_id: UUID,
+    item_id: int,
     data: CartItemUpdate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -49,7 +48,7 @@ def edit_cart_item(
 
 @router.delete('/cart/items/{item_id}', response_model=CartResponse)
 def remove_cart_item(
-    item_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    item_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     return commerce_service.remove_cart_item(db, user.id, item_id)
 
@@ -63,7 +62,7 @@ def buy_cart(
 
 @router.get('/sales', response_model=list[SaleResponse])
 def sales_history(
-    client_id: UUID | None = None,
+    client_id: int | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -73,7 +72,7 @@ def sales_history(
 
 
 @router.get('/sales/{sale_id}', response_model=SaleResponse)
-def get_sale(sale_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_sale(sale_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     sale = commerce_service.get_sale(db, sale_id)
     if user.role not in PRIVILEGED and sale.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
@@ -90,7 +89,7 @@ def register_pos_sale(
 @router.get('/reservations', response_model=list[ReservationResponse])
 def list_reservations(
     status: ReservationStatus | None = None,
-    branch_id: UUID | None = None,
+    branch_id: int | None = None,
     reservation_date: DateType | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -109,7 +108,7 @@ def create_reservation(
 
 @router.get('/reservations/{reservation_id}', response_model=ReservationResponse)
 def get_reservation(
-    reservation_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    reservation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     reservation = commerce_service.get_reservation(db, reservation_id)
     if user.role not in PRIVILEGED and reservation.client_id != user.id:
@@ -119,7 +118,7 @@ def get_reservation(
 
 @router.patch('/reservations/{reservation_id}', response_model=ReservationResponse)
 def update_reservation(
-    reservation_id: UUID,
+    reservation_id: int,
     data: ReservationUpdate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -135,7 +134,7 @@ def update_reservation(
 
 @router.delete('/reservations/{reservation_id}', status_code=204)
 def delete_reservation(
-    reservation_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    reservation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     reservation = commerce_service.get_reservation(db, reservation_id)
     if user.role not in PRIVILEGED and reservation.client_id != user.id:

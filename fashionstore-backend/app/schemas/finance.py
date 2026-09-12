@@ -1,6 +1,5 @@
 from datetime import datetime
 from decimal import Decimal
-from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -27,28 +26,28 @@ class FeeUpdate(BaseModel):
 
 
 class FeeResponse(ORMModel):
-    id: UUID
+    id: int
     fee_type: FeeType
     period: str
     concept: str
-    amount: float
+    amount: Decimal
     due_date: datetime | None
     description: str | None
-    created_by_id: UUID
+    created_by_id: int
     created_at: datetime
 
 
 class PaymentCreate(BaseModel):
-    fee_id: UUID
+    fee_id: int
     amount: float = Field(gt=0)
     method: PaymentMethod = PaymentMethod.TARJETA
 
 
 class PaymentResponse(ORMModel):
-    id: UUID
-    fee_id: UUID
-    user_id: UUID
-    amount: float
+    id: int
+    fee_id: int
+    user_id: int
+    amount: Decimal
     method: PaymentMethod
     status: str
     reference: str | None
@@ -57,8 +56,8 @@ class PaymentResponse(ORMModel):
 
 
 class FineCreate(BaseModel):
-    user_id: UUID
-    fee_id: UUID | None = None
+    user_id: int
+    fee_id: int | None = None
     reason: str = Field(min_length=1, max_length=255)
     amount: float = Field(gt=0)
 
@@ -70,11 +69,11 @@ class FineUpdate(BaseModel):
 
 
 class FineResponse(ORMModel):
-    id: UUID
-    user_id: UUID
-    fee_id: UUID | None
+    id: int
+    user_id: int
+    fee_id: int | None
     reason: str
-    amount: float
+    amount: Decimal
     status: FineStatus
     issued_at: datetime
     paid_at: datetime | None
@@ -82,7 +81,7 @@ class FineResponse(ORMModel):
 
 
 class FeeLedgerItem(BaseModel):
-    id: UUID
+    id: int
     fee_type: FeeType
     period: str
     concept: str

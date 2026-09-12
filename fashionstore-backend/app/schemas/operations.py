@@ -1,5 +1,5 @@
 from datetime import date as DateType, datetime, time
-from uuid import UUID
+
 
 from pydantic import BaseModel, Field
 
@@ -28,7 +28,7 @@ class FacilityUpdate(BaseModel):
 
 
 class FacilityResponse(ORMModel):
-    id: UUID
+    id: int
     name: str
     description: str | None
     location: str | None
@@ -36,7 +36,7 @@ class FacilityResponse(ORMModel):
     is_active: bool
     open_time: time | None
     close_time: time | None
-    created_by_id: UUID
+    created_by_id: int
     created_at: datetime
     updated_at: datetime
 
@@ -49,7 +49,7 @@ class TimeSlot(BaseModel):
 
 
 class AvailabilityResponse(BaseModel):
-    facility_id: UUID
+    facility_id: int
     facility_name: str
     date: DateType
     open_time: time | None
@@ -60,7 +60,7 @@ class AvailabilityResponse(BaseModel):
 
 
 class FacilityReservationCreate(BaseModel):
-    facility_id: UUID
+    facility_id: int
     date: DateType
     start_time: time
     end_time: time
@@ -76,9 +76,9 @@ class FacilityReservationUpdate(BaseModel):
 
 
 class FacilityReservationResponse(ORMModel):
-    id: UUID
-    facility_id: UUID
-    user_id: UUID
+    id: int
+    facility_id: int
+    user_id: int
     date: DateType
     start_time: time
     end_time: time
@@ -90,8 +90,8 @@ class FacilityReservationResponse(ORMModel):
 class MaintenanceCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str | None = None
-    facility_id: UUID | None = None
-    assignee_id: UUID | None = None
+    facility_id: int = None
+    assignee_id: int = None
     priority: Priority = Priority.MEDIA
     status: TaskStatus = TaskStatus.PENDIENTE
     scheduled_date: DateType | None = None
@@ -100,30 +100,30 @@ class MaintenanceCreate(BaseModel):
 class MaintenanceUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
-    facility_id: UUID | None = None
-    assignee_id: UUID | None = None
+    facility_id: int = None
+    assignee_id: int = None
     priority: Priority | None = None
     status: TaskStatus | None = None
     scheduled_date: DateType | None = None
 
 
 class MaintenanceResponse(ORMModel):
-    id: UUID
+    id: int
     title: str
     description: str | None
-    facility_id: UUID | None
-    assignee_id: UUID | None
+    facility_id: int | None
+    assignee_id: int | None
     priority: Priority
     status: TaskStatus
     scheduled_date: DateType | None
     completed_at: datetime | None
-    created_by_id: UUID
+    created_by_id: int
     created_at: datetime
     updated_at: datetime
 
 
 class FacilityUsageItem(BaseModel):
-    facility_id: UUID
+    facility_id: int
     facility_name: str
     reservations_count: int
     completed_count: int
