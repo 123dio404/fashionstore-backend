@@ -1,10 +1,7 @@
-from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
-from uuid import UUID, uuid4
-
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from app.core.database import Base
 
 if TYPE_CHECKING:
@@ -12,18 +9,22 @@ if TYPE_CHECKING:
 
 
 class Supplier(Base):
-    __tablename__ = "suppliers"
+    __tablename__ = "proveedor"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    name: Mapped[str] = mapped_column(String(150), index=True)
-    tax_id: Mapped[str] = mapped_column(String(50), unique=True)
-    contact_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
-    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
-    phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
-    address: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column("nombre", String(150), index=True)
+    ci: Mapped[str] = mapped_column("ci", String(30), unique=True)
+    phone: Mapped[str | None] = mapped_column("telefono", String(20), nullable=True)
+    email: Mapped[str | None] = mapped_column("email", String(150), nullable=True)
+    address: Mapped[str | None] = mapped_column("direccion", String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column("estado", Boolean, default=True, nullable=False)
 
-    products: Mapped[list["Product"]] = relationship(back_populates="supplier")
+    products: Mapped[list["Product"]] = relationship(secondary="producto_proveedor", back_populates="suppliers")
+
+
+class ProductSupplier(Base):
+    __tablename__ = "producto_proveedor"
+
+    product_id: Mapped[int] = mapped_column("id_producto", ForeignKey("producto.id", ondelete="CASCADE"), primary_key=True)
+    supplier_id: Mapped[int] = mapped_column("id_proveedor", ForeignKey("proveedor.id", ondelete="RESTRICT"), primary_key=True)
+    purchase_price: Mapped[Decimal] = mapped_column("precio_compra", Numeric(12, 2))

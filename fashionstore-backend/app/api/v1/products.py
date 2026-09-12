@@ -1,4 +1,3 @@
-from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -6,7 +5,6 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import get_db, require_role
 from app.models.inventory import Stock
 from app.models.product import Category, Color, Product, ProductVariant, Season, Size
-from app.models.supplier import Supplier
 from app.models.user import Role
 from app.schemas.inventory import AvailabilityResponse
 from app.schemas.product import (CategoryResponse, ColorResponse, ParameterCreate, ParameterUpdate, ProductCreate, ProductResponse, ProductUpdate, SeasonResponse, SizeResponse, VariantCreate, VariantResponse)
@@ -18,16 +16,16 @@ editor = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO))
 def list_categories(db: Session = Depends(get_db)): return list(db.scalars(select(Category).order_by(Category.name)).all())
 @router.post('/parameters/categories', response_model=CategoryResponse, status_code=201, dependencies=[editor])
 def add_category(data: ParameterCreate, db: Session = Depends(get_db)):
-    obj=Category(name=data.name,description=data.description); db.add(obj)
+    obj=Category(name=data.name); db.add(obj)
     try: db.commit(); db.refresh(obj)
     except IntegrityError: db.rollback(); raise HTTPException(409,'Category already exists')
     return obj
 @router.patch('/parameters/categories/{item_id}', response_model=CategoryResponse, dependencies=[editor])
-def edit_category(item_id: UUID, data: ParameterUpdate, db: Session = Depends(get_db)):
+def edit_category(item_id: int, data: ParameterUpdate, db: Session = Depends(get_db)):
     obj=db.get(Category,item_id)
     if not obj: raise HTTPException(404,'Category not found')
     for k,v in data.model_dump(exclude_unset=True).items():
-        if k in {'name','description'}: setattr(obj,k,v)
+        if k == 'name': setattr(obj,k,v)
     db.commit(); db.refresh(obj); return obj
 
 @router.get('/parameters/seasons', response_model=list[SeasonResponse])
@@ -41,7 +39,7 @@ def add_season(data: ParameterCreate, db: Session = Depends(get_db)):
 
 
 @router.delete('/parameters/categories/{item_id}', status_code=204, dependencies=[editor])
-def delete_category(item_id: UUID, db: Session = Depends(get_db)):
+def delete_category(item_id: int, db: Session = Depends(get_db)):
     obj = db.get(Category, item_id)
     if not obj:
         raise HTTPException(404, 'Category not found')
@@ -52,7 +50,7 @@ def delete_category(item_id: UUID, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(409, 'Category is in use')
 @router.patch('/parameters/seasons/{item_id}', response_model=SeasonResponse, dependencies=[editor])
-def edit_season(item_id: UUID, data: ParameterUpdate, db: Session = Depends(get_db)):
+def edit_season(item_id: int, data: ParameterUpdate, db: Session = Depends(get_db)):
     obj=db.get(Season,item_id)
     if not obj: raise HTTPException(404,'Season not found')
     if data.name is not None: obj.name=data.name
@@ -60,7 +58,7 @@ def edit_season(item_id: UUID, data: ParameterUpdate, db: Session = Depends(get_
 
 
 @router.delete('/parameters/seasons/{item_id}', status_code=204, dependencies=[editor])
-def delete_season(item_id: UUID, db: Session = Depends(get_db)):
+def delete_season(item_id: int, db: Session = Depends(get_db)):
     obj = db.get(Season, item_id)
     if not obj:
         raise HTTPException(404, 'Season not found')
@@ -76,7 +74,7 @@ def add_size(data: ParameterCreate, db: Session = Depends(get_db)):
     except IntegrityError: db.rollback(); raise HTTPException(409,'Size already exists')
     return obj
 @router.patch('/parameters/sizes/{item_id}', response_model=SizeResponse, dependencies=[editor])
-def edit_size(item_id: UUID, data: ParameterUpdate, db: Session = Depends(get_db)):
+def edit_size(item_id: int, data: ParameterUpdate, db: Session = Depends(get_db)):
     obj=db.get(Size,item_id)
     if not obj: raise HTTPException(404,'Size not found')
     if data.name is not None: obj.name=data.name
@@ -84,7 +82,7 @@ def edit_size(item_id: UUID, data: ParameterUpdate, db: Session = Depends(get_db
 
 
 @router.delete('/parameters/sizes/{item_id}', status_code=204, dependencies=[editor])
-def delete_size(item_id: UUID, db: Session = Depends(get_db)):
+def delete_size(item_id: int, db: Session = Depends(get_db)):
     obj = db.get(Size, item_id)
     if not obj:
         raise HTTPException(404, 'Size not found')
@@ -95,22 +93,20 @@ def delete_size(item_id: UUID, db: Session = Depends(get_db)):
 def list_colors(db: Session = Depends(get_db)): return list(db.scalars(select(Color).order_by(Color.name)).all())
 @router.post('/parameters/colors', response_model=ColorResponse, status_code=201, dependencies=[editor])
 def add_color(data: ParameterCreate, db: Session = Depends(get_db)):
-    if not data.hex_code: raise HTTPException(422,'hex_code is required for colors')
-    obj=Color(name=data.name,hex_code=data.hex_code); db.add(obj)
+    obj=Color(name=data.name); db.add(obj)
     try: db.commit(); db.refresh(obj)
     except IntegrityError: db.rollback(); raise HTTPException(409,'Color already exists')
     return obj
 @router.patch('/parameters/colors/{item_id}', response_model=ColorResponse, dependencies=[editor])
-def edit_color(item_id: UUID, data: ParameterUpdate, db: Session = Depends(get_db)):
+def edit_color(item_id: int, data: ParameterUpdate, db: Session = Depends(get_db)):
     obj=db.get(Color,item_id)
     if not obj: raise HTTPException(404,'Color not found')
     if data.name is not None: obj.name=data.name
-    if data.hex_code is not None: obj.hex_code=data.hex_code
     db.commit(); db.refresh(obj); return obj
 
 
 @router.delete('/parameters/colors/{item_id}', status_code=204, dependencies=[editor])
-def delete_color(item_id: UUID, db: Session = Depends(get_db)):
+def delete_color(item_id: int, db: Session = Depends(get_db)):
     obj = db.get(Color, item_id)
     if not obj:
         raise HTTPException(404, 'Color not found')
@@ -123,23 +119,23 @@ def list_products(db: Session = Depends(get_db)):
 @router.post('/products', response_model=ProductResponse, status_code=201, dependencies=[editor])
 def add_product(data: ProductCreate, db: Session = Depends(get_db)): return create_product(db,data)
 @router.get('/products/{product_id}', response_model=ProductResponse)
-def get_product(product_id: UUID, db: Session = Depends(get_db)):
+def get_product(product_id: int, db: Session = Depends(get_db)):
     obj=db.scalar(select(Product).where(Product.id==product_id).options(selectinload(Product.variants)))
     if not obj: raise HTTPException(404,'Product not found')
     return obj
 @router.patch('/products/{product_id}', response_model=ProductResponse, dependencies=[editor])
-def edit_product(product_id: UUID, data: ProductUpdate, db: Session = Depends(get_db)):
+def edit_product(product_id: int, data: ProductUpdate, db: Session = Depends(get_db)):
     obj=db.get(Product,product_id)
     if not obj: raise HTTPException(404,'Product not found')
     return update_product(db,obj,data)
 @router.delete('/products/{product_id}', status_code=204, dependencies=[editor])
-def delete_product(product_id: UUID, db: Session = Depends(get_db)):
+def delete_product(product_id: int, db: Session = Depends(get_db)):
     obj = db.get(Product, product_id)
     if not obj: raise HTTPException(404, 'Product not found')
     db.delete(obj)
     db.commit()
 @router.post('/products/{product_id}/variants', response_model=VariantResponse, status_code=201, dependencies=[editor])
-def add_variant(product_id: UUID, data: VariantCreate, db: Session = Depends(get_db)):
+def add_variant(product_id: int, data: VariantCreate, db: Session = Depends(get_db)):
     if not db.get(Product,product_id): raise HTTPException(404,'Product not found')
     if not db.get(Size,data.size_id): raise HTTPException(404,'Size not found')
     if not db.get(Color,data.color_id): raise HTTPException(404,'Color not found')
@@ -148,7 +144,7 @@ def add_variant(product_id: UUID, data: VariantCreate, db: Session = Depends(get
     except IntegrityError: db.rollback(); raise HTTPException(409,'Variant already exists')
     return obj
 @router.get('/products/{product_id}/availability', response_model=list[AvailabilityResponse])
-def availability(product_id: UUID, branch_id: UUID, db: Session = Depends(get_db)):
+def availability(product_id: int, branch_id: int, db: Session = Depends(get_db)):
     if not db.get(Product,product_id): raise HTTPException(404,'Product not found')
     rows=db.scalars(
         select(Stock)

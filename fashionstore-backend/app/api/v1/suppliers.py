@@ -1,4 +1,3 @@
-from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -18,12 +17,12 @@ def add_supplier(data:SupplierCreate,db:Session=Depends(get_db)):
     except IntegrityError: db.rollback(); raise HTTPException(409,'Tax ID already exists')
     return obj
 @router.get('/{supplier_id}',response_model=SupplierResponse)
-def get_supplier(supplier_id:UUID,db:Session=Depends(get_db)):
+def get_supplier(supplier_id: int,db:Session=Depends(get_db)):
     obj=db.get(Supplier,supplier_id)
     if not obj: raise HTTPException(404,'Supplier not found')
     return obj
 @router.patch('/{supplier_id}',response_model=SupplierResponse,dependencies=[editor])
-def edit_supplier(supplier_id:UUID,data:SupplierUpdate,db:Session=Depends(get_db)):
+def edit_supplier(supplier_id: int,data:SupplierUpdate,db:Session=Depends(get_db)):
     obj=db.get(Supplier,supplier_id)
     if not obj: raise HTTPException(404,'Supplier not found')
     for k,v in data.model_dump(exclude_unset=True).items(): setattr(obj,k,v)
@@ -31,7 +30,7 @@ def edit_supplier(supplier_id:UUID,data:SupplierUpdate,db:Session=Depends(get_db
     except IntegrityError: db.rollback(); raise HTTPException(409,'Tax ID already exists')
     return obj
 @router.delete('/{supplier_id}',status_code=204,dependencies=[editor])
-def delete_supplier(supplier_id:UUID,db:Session=Depends(get_db)):
+def delete_supplier(supplier_id: int,db:Session=Depends(get_db)):
     obj=db.get(Supplier,supplier_id)
     if not obj: raise HTTPException(404,'Supplier not found')
     db.delete(obj); db.commit()

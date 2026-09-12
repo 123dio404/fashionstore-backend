@@ -1,10 +1,7 @@
-from datetime import datetime
+from datetime import time
 from typing import TYPE_CHECKING
-from uuid import UUID, uuid4
-
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from app.core.database import Base
 
 if TYPE_CHECKING:
@@ -13,31 +10,36 @@ if TYPE_CHECKING:
 
 
 class City(Base):
-    __tablename__ = "cities"
+    __tablename__ = "ciudad"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    country: Mapped[str] = mapped_column(String(100), default="Colombia")
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column("nombre", String(100), unique=True, index=True)
 
     branches: Mapped[list["Branch"]] = relationship(back_populates="city")
 
 
 class Branch(Base):
-    __tablename__ = "branches"
+    __tablename__ = "sucursal"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    city_id: Mapped[UUID] = mapped_column(ForeignKey("cities.id", ondelete="RESTRICT"), index=True)
-    manager_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
-    name: Mapped[str] = mapped_column(String(150))
-    address: Mapped[str] = mapped_column(String(255))
-    fitting_rooms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    city_id: Mapped[int] = mapped_column("id_ciudad", ForeignKey("ciudad.id", ondelete="RESTRICT"), index=True)
+    name: Mapped[str] = mapped_column("nombre", String(100))
+    address: Mapped[str] = mapped_column("direccion", String(255))
+    phone: Mapped[str | None] = mapped_column("telefono", String(20), nullable=True)
+    is_active: Mapped[bool] = mapped_column("estado", Boolean, default=True, nullable=False)
 
     city: Mapped["City"] = relationship(back_populates="branches")
-    manager: Mapped["User | None"] = relationship(back_populates="branches")
+    hours: Mapped[list["BranchHour"]] = relationship(back_populates="branch", cascade="all, delete-orphan")
     stocks: Mapped[list["Stock"]] = relationship(back_populates="branch")
+
+
+class BranchHour(Base):
+    __tablename__ = "horario_sucursal"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    branch_id: Mapped[int] = mapped_column("id_sucursal", ForeignKey("sucursal.id", ondelete="CASCADE"), index=True)
+    day_of_week: Mapped[str] = mapped_column("dia_semana", String(20))
+    open_time: Mapped[time] = mapped_column("hora_inicio", Time)
+    close_time: Mapped[time] = mapped_column("hora_fin", Time)
+
+    branch: Mapped["Branch"] = relationship(back_populates="hours")
