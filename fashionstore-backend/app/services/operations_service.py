@@ -8,27 +8,27 @@ from sqlalchemy.orm import Session
 
 from app.models.operations import (
     Facility,
+    FacilityReservation,
+    FacilityReservationStatus,
     MaintenanceTask,
     Priority,
-    Reservation,
-    ReservationStatus,
     TaskStatus,
 )
 from app.models.user import User
 from app.schemas.operations import (
     AvailabilityResponse,
     FacilityCreate,
+    FacilityReservationCreate,
+    FacilityReservationUpdate,
     FacilityUpdate,
     FacilityUsageItem,
     FacilityUsageResponse,
     MaintenanceCreate,
     MaintenanceUpdate,
-    ReservationCreate,
-    ReservationUpdate,
     TimeSlot,
 )
 
-ACTIVE_STATUSES = (ReservationStatus.PENDIENTE, ReservationStatus.CONFIRMADA, ReservationStatus.COMPLETADA)
+ACTIVE_STATUSES = (FacilityReservationStatus.PENDIENTE, FacilityReservationStatus.CONFIRMADA, FacilityReservationStatus.COMPLETADA)
 
 
 def get_facility(db: Session, facility_id: UUID) -> Facility:
@@ -88,7 +88,7 @@ def _slot_times(open_time: time | None, close_time: time | None) -> list[tuple[t
     return slots
 
 
-def _overlaps(start: time, end: time, r: Reservation) -> bool:
+def _overlaps(start: time, end: time, r: FacilityReservation) -> bool:
     return r.start_time < end and r.end_time > start
 
 
@@ -96,10 +96,10 @@ def check_availability(db: Session, facility_id: UUID, day: date) -> Availabilit
     facility = get_facility(db, facility_id)
     reservations = list(
         db.scalars(
-            select(Reservation).where(
-                Reservation.facility_id == facility_id,
-                Reservation.date == day,
-                Reservation.status.in_(ACTIVE_STATUSES),
+            select(FacilityReservation).where(
+                FacilityReservation.facility_id == facility_id,
+                FacilityReservation.date == day,
+                FacilityReservation.status.in_(ACTIVE_STATUSES),
             )
         ).all()
     )
@@ -125,7 +125,7 @@ def check_availability(db: Session, facility_id: UUID, day: date) -> Availabilit
     )
 
 
-def create_reservation(db: Session, data: ReservationCreate, user_id: UUID) -> Reservation:
+def create_reservation(db: Session, data: FacilityReservationCreate, user_id: UUID) -> FacilityReservation:
     facility = get_facility(db, data.facility_id)
     if not facility.is_active:
         raise HTTPException(400, "Facility is not active")
@@ -136,23 +136,23 @@ def create_reservation(db: Session, data: ReservationCreate, user_id: UUID) -> R
             raise HTTPException(400, "Reservation outside opening hours")
     existing = list(
         db.scalars(
-            select(Reservation).where(
-                Reservation.facility_id == data.facility_id,
-                Reservation.date == data.date,
-                Reservation.status.in_(ACTIVE_STATUSES),
+            select(FacilityReservation).where(
+                FacilityReservation.facility_id == data.facility_id,
+                FacilityReservation.date == data.date,
+                FacilityReservation.status.in_(ACTIVE_STATUSES),
             )
         ).all()
     )
     booked = sum(1 for r in existing if _overlaps(data.start_time, data.end_time, r))
     if booked >= facility.capacity:
         raise HTTPException(409, "No availability for the requested slot")
-    reservation = Reservation(
+    reservation = FacilityReservation(
         facility_id=data.facility_id,
         user_id=user_id,
         date=data.date,
         start_time=data.start_time,
         end_time=data.end_time,
-        status=ReservationStatus.CONFIRMADA,
+        status=FacilityReservationStatus.CONFIRMADA,
         notes=data.notes,
     )
     db.add(reservation)
@@ -161,8 +161,8 @@ def create_reservation(db: Session, data: ReservationCreate, user_id: UUID) -> R
     return reservation
 
 
-def get_reservation(db: Session, reservation_id: UUID) -> Reservation:
-    reservation = db.get(Reservation, reservation_id)
+def get_reservation(db: Session, reservation_id: UUID) -> FacilityReservation:
+    reservation = db.get(FacilityReservation, reservation_id)
     if reservation is None:
         raise HTTPException(404, "Reservation not found")
     return reservation
@@ -173,18 +173,18 @@ def list_reservations(
     facility_id: UUID | None = None,
     day: date | None = None,
     user_id: UUID | None = None,
-) -> list[Reservation]:
-    q = select(Reservation).order_by(Reservation.date.desc(), Reservation.start_time)
+) -> list[FacilityReservation]:
+    q = select(FacilityReservation).order_by(FacilityReservation.date.desc(), FacilityReservation.start_time)
     if facility_id is not None:
-        q = q.where(Reservation.facility_id == facility_id)
+        q = q.where(FacilityReservation.facility_id == facility_id)
     if day is not None:
-        q = q.where(Reservation.date == day)
+        q = q.where(FacilityReservation.date == day)
     if user_id is not None:
-        q = q.where(Reservation.user_id == user_id)
+        q = q.where(FacilityReservation.user_id == user_id)
     return list(db.scalars(q).all())
 
 
-def update_reservation(db: Session, reservation_id: UUID, data: ReservationUpdate) -> Reservation:
+def update_reservation(db: Session, reservation_id: UUID, data: FacilityReservationUpdate) -> FacilityReservation:
     reservation = get_reservation(db, reservation_id)
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(reservation, k, v)
@@ -270,12 +270,12 @@ def facility_usage_report(db: Session, period: str) -> FacilityUsageResponse:
     start, end = _period_bounds(period)
     reservations = list(
         db.scalars(
-            select(Reservation).where(Reservation.date >= start, Reservation.date < end)
+            select(FacilityReservation).where(FacilityReservation.date >= start, FacilityReservation.date < end)
         ).all()
     )
     facilities = {f.id: f for f in list_facilities(db)}
 
-    by_facility: dict[UUID, list[Reservation]] = {}
+    by_facility: dict[UUID, list[FacilityReservation]] = {}
     for r in reservations:
         by_facility.setdefault(r.facility_id, []).append(r)
 
@@ -283,12 +283,12 @@ def facility_usage_report(db: Session, period: str) -> FacilityUsageResponse:
     for facility_id, rs in sorted(by_facility.items(), key=lambda kv: kv[1], reverse=False):
         facility = facilities.get(facility_id)
         total = len(rs)
-        completed = sum(1 for r in rs if r.status == ReservationStatus.COMPLETADA)
-        cancelled = sum(1 for r in rs if r.status == ReservationStatus.CANCELADA)
+        completed = sum(1 for r in rs if r.status == FacilityReservationStatus.COMPLETADA)
+        cancelled = sum(1 for r in rs if r.status == FacilityReservationStatus.CANCELADA)
         total_hours = sum(
             (datetime.combine(r.date, r.end_time) - datetime.combine(r.date, r.start_time)).seconds / 3600
             for r in rs
-            if r.status != ReservationStatus.CANCELADA
+            if r.status != FacilityReservationStatus.CANCELADA
         )
         open_time = facility.open_time if facility else None
         close_time = facility.close_time if facility else None

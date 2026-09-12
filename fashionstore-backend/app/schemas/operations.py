@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.models.operations import Priority, ReservationStatus, TaskStatus
+from app.models.operations import FacilityReservationStatus, Priority, TaskStatus
 from app.schemas.common import ORMModel
 
 
@@ -59,7 +59,7 @@ class AvailabilityResponse(BaseModel):
     slots: list[TimeSlot]
 
 
-class ReservationCreate(BaseModel):
+class FacilityReservationCreate(BaseModel):
     facility_id: UUID
     date: DateType
     start_time: time
@@ -67,22 +67,22 @@ class ReservationCreate(BaseModel):
     notes: str | None = None
 
 
-class ReservationUpdate(BaseModel):
+class FacilityReservationUpdate(BaseModel):
     date: DateType | None = None
     start_time: time | None = None
     end_time: time | None = None
-    status: ReservationStatus | None = None
+    status: FacilityReservationStatus | None = None
     notes: str | None = None
 
 
-class ReservationResponse(ORMModel):
+class FacilityReservationResponse(ORMModel):
     id: UUID
     facility_id: UUID
     user_id: UUID
     date: DateType
     start_time: time
     end_time: time
-    status: ReservationStatus
+    status: FacilityReservationStatus
     notes: str | None
     created_at: datetime
 

@@ -10,15 +10,15 @@ from app.models.user import Role, User
 from app.schemas.operations import (
     AvailabilityResponse,
     FacilityCreate,
+    FacilityReservationCreate,
+    FacilityReservationResponse,
+    FacilityReservationUpdate,
     FacilityResponse,
     FacilityUpdate,
     FacilityUsageResponse,
     MaintenanceCreate,
     MaintenanceResponse,
     MaintenanceUpdate,
-    ReservationCreate,
-    ReservationResponse,
-    ReservationUpdate,
 )
 from app.services import operations_service
 
@@ -58,7 +58,7 @@ def get_availability(facility_id: UUID, date: date, db: Session = Depends(get_db
     return operations_service.check_availability(db, facility_id, date)
 
 
-@router.get('/reservations', response_model=list[ReservationResponse])
+@router.get('/reservations', response_model=list[FacilityReservationResponse])
 def list_reservations(
     facility_id: UUID | None = None,
     day: date | None = None,
@@ -70,17 +70,17 @@ def list_reservations(
     return operations_service.list_reservations(db, facility_id, day, user_id=user.id)
 
 
-@router.post('/reservations', response_model=ReservationResponse, status_code=201)
+@router.post('/reservations', response_model=FacilityReservationResponse, status_code=201)
 def create_reservation(
-    data: ReservationCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    data: FacilityReservationCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     return operations_service.create_reservation(db, data, user.id)
 
 
-@router.patch('/reservations/{reservation_id}', response_model=ReservationResponse)
+@router.patch('/reservations/{reservation_id}', response_model=FacilityReservationResponse)
 def update_reservation(
     reservation_id: UUID,
-    data: ReservationUpdate,
+    data: FacilityReservationUpdate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

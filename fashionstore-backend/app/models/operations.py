@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
-class ReservationStatus(str, enum.Enum):
+class FacilityReservationStatus(str, enum.Enum):
     PENDIENTE = "pendiente"
     CONFIRMADA = "confirmada"
     CANCELADA = "cancelada"
@@ -54,13 +54,13 @@ class Facility(Base):
     )
 
     created_by: Mapped["User"] = relationship()
-    reservations: Mapped[list["Reservation"]] = relationship(
+    reservations: Mapped[list["FacilityReservation"]] = relationship(
         back_populates="facility", cascade="all, delete-orphan"
     )
     maintenance_tasks: Mapped[list["MaintenanceTask"]] = relationship(back_populates="facility")
 
 
-class Reservation(Base):
+class FacilityReservation(Base):
     __tablename__ = "facility_reservations"
     __table_args__ = (
         CheckConstraint("end_time > start_time", name="ck_reservation_time_range"),
@@ -74,9 +74,9 @@ class Reservation(Base):
     date: Mapped[date] = mapped_column(Date, index=True)
     start_time: Mapped[time] = mapped_column(Time)
     end_time: Mapped[time] = mapped_column(Time)
-    status: Mapped[ReservationStatus] = mapped_column(
-        Enum(ReservationStatus, name="reservation_status", native_enum=False),
-        default=ReservationStatus.PENDIENTE,
+    status: Mapped[FacilityReservationStatus] = mapped_column(
+        Enum(FacilityReservationStatus, name="reservation_status", native_enum=False),
+        default=FacilityReservationStatus.PENDIENTE,
         index=True,
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

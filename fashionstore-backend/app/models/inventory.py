@@ -18,6 +18,8 @@ class MovementType(str, enum.Enum):
     INGRESO = "ingreso"
     TRANSFERENCIA = "transferencia"
     AJUSTE = "ajuste"
+    VENTA = "venta"
+    RESERVA = "reserva"
 
 
 class Stock(Base):
