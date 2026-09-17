@@ -19,6 +19,14 @@ from app.models.operations import (
     TaskStatus,
 )
 from app.models.product import Category, Color, Product, ProductVariant, Season, Size
+from app.models.customer_experience import (
+    FittingSessionStatus,
+    Recommendation,
+    RecommendationItem,
+    UserPreference,
+    VirtualFittingResult,
+    VirtualFittingSession,
+)
 from app.models.supplier import ProductSupplier, Supplier
 from app.models.user import Role, Rol, User, UsuarioRol
 
@@ -30,6 +38,7 @@ __all__ = [
     "Category",
     "City",
     "Color",
+    "FittingSessionStatus",
     "Facility",
     "FacilityReservation",
     "FacilityReservationStatus",
@@ -47,6 +56,8 @@ __all__ = [
     "Product",
     "ProductSupplier",
     "ProductVariant",
+    "Recommendation",
+    "RecommendationItem",
     "Reservation",
     "ReservationItem",
     "Role",
@@ -60,5 +71,8 @@ __all__ = [
     "Supplier",
     "TaskStatus",
     "User",
+    "UserPreference",
     "UsuarioRol",
+    "VirtualFittingResult",
+    "VirtualFittingSession",
 ]

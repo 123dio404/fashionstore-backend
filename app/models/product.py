@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -24,8 +24,8 @@ class Season(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column("nombre", String(100), unique=True, index=True)
-    start_date: Mapped[date] = mapped_column("fecha_inicio", Date)
-    end_date: Mapped[date] = mapped_column("fecha_fin", Date)
+    start_date: Mapped[date | None] = mapped_column("fecha_inicio", Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column("fecha_fin", Date, nullable=True)
 
 
 class Size(Base):
@@ -47,12 +47,17 @@ class Product(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     category_id: Mapped[int] = mapped_column("id_categoria", ForeignKey("categoria.id", ondelete="RESTRICT"))
+    season_id: Mapped[int | None] = mapped_column("id_temporada", ForeignKey("temporada.id", ondelete="SET NULL"), nullable=True)
     name: Mapped[str] = mapped_column("nombre", String(150), index=True)
     brand: Mapped[str | None] = mapped_column("marca", String(100), nullable=True)
     price: Mapped[Decimal] = mapped_column("precio", Numeric(12, 2))
     is_active: Mapped[bool] = mapped_column("estado", Boolean, default=True, nullable=False)
+    model_3d_url: Mapped[str | None] = mapped_column("modelo_3d_url", String(500), nullable=True)
+    model_3d_format: Mapped[str | None] = mapped_column("modelo_3d_formato", String(10), nullable=True)
+    technical_metadata: Mapped[str | None] = mapped_column("metadatos_tecnicos", Text, nullable=True)
 
     category: Mapped["Category"] = relationship(back_populates="products")
+    season: Mapped["Season | None"] = relationship()
     suppliers: Mapped[list["Supplier"]] = relationship(secondary="producto_proveedor", back_populates="products")
     variants: Mapped[list["ProductVariant"]] = relationship(
         back_populates="product", cascade="all, delete-orphan"

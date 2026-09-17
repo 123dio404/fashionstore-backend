@@ -87,6 +87,11 @@ class Reservation(Base):
     reservation_date: Mapped[date] = mapped_column("fecha_reserva", nullable=False, index=True)
     reservation_time: Mapped[time] = mapped_column("hora_reserva", nullable=False)
     status: Mapped[str] = mapped_column("estado", String(30), default="Pendiente", nullable=False, index=True)
+    fitting_room: Mapped[int | None] = mapped_column("probador", Integer, nullable=True)
+    prepared_at: Mapped[datetime | None] = mapped_column("fecha_preparacion", DateTime(timezone=True), nullable=True)
+    assigned_at: Mapped[datetime | None] = mapped_column("fecha_asignacion", DateTime(timezone=True), nullable=True)
+    checked_out_at: Mapped[datetime | None] = mapped_column("fecha_checkout", DateTime(timezone=True), nullable=True)
+    refunded_at: Mapped[datetime | None] = mapped_column("fecha_devolucion", DateTime(timezone=True), nullable=True)
 
     branch: Mapped["Branch"] = relationship()
     items: Mapped[list["ReservationItem"]] = relationship(back_populates="reservation", cascade="all, delete-orphan")

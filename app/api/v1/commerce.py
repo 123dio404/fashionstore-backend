@@ -16,6 +16,7 @@ from app.schemas.commerce import (
     ReservationStatus,
     ReservationUpdate,
     SaleResponse,
+    ReceiptResponse,
 )
 from app.services import commerce_service
 
@@ -77,6 +78,14 @@ def get_sale(sale_id: int, user: User = Depends(get_current_user), db: Session =
     if user.role not in PRIVILEGED and sale.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     return sale
+
+
+@router.get('/sales/{sale_id}/receipt', response_model=ReceiptResponse)
+def sale_receipt(sale_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    sale = commerce_service.get_sale(db, sale_id)
+    if user.role not in PRIVILEGED and sale.client_id != user.id:
+        raise HTTPException(status_code=403, detail='Insufficient permissions')
+    return commerce_service.get_receipt(db, sale_id)
 
 
 @router.post('/sales/pos', response_model=SaleResponse, status_code=201, dependencies=[staff])

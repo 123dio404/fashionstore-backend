@@ -27,9 +27,16 @@ class PaymentStatus(str, enum.Enum):
 class ReservationStatus(str, enum.Enum):
     PENDIENTE = "pendiente"
     CONFIRMADA = "confirmada"
+    PREPARACION = "preparacion"
+    LISTA = "lista"
+    ASIGNADA = "asignada"
+    EN_PROBADOR = "en_probador"
+    CHECKOUT = "checkout"
     EN_TIENDA = "en_tienda"
     COMPLETADA = "completada"
     CANCELADA = "cancelada"
+    REEMBOLSADA = "reembolsada"
+    DEVUELTA = "devuelta"
 
 
 class CartItemRequest(BaseModel):
@@ -62,6 +69,9 @@ class CartResponse(BaseModel):
 
 class CheckoutRequest(BaseModel):
     branch_id: int
+    payment_provider: str = "mock"
+    payment_status: PaymentStatus = PaymentStatus.COMPLETADO
+    payment_reference: str | None = None
 
 
 class SaleItemInput(BaseModel):
@@ -74,6 +84,9 @@ class PosSaleCreate(BaseModel):
     client_id: int
     items: list[SaleItemInput] = Field(min_length=1)
     paid: bool = True
+    payment_provider: str = "mock"
+    payment_status: PaymentStatus | None = None
+    payment_reference: str | None = None
 
 
 class SaleItemResponse(ORMModel):
@@ -104,6 +117,20 @@ class SaleResponse(ORMModel):
     payments: list[SalePaymentResponse] = []
 
 
+class ReceiptResponse(BaseModel):
+    sale_id: int
+    receipt_number: str
+    invoice_number: str
+    sale_date: datetime
+    sale_type: SaleType
+    branch_id: int
+    client_id: int
+    subtotal: Decimal
+    total: Decimal
+    payment_status: PaymentStatus
+    items: list[SaleItemResponse]
+
+
 class ReservationItemInput(BaseModel):
     stock_id: int
     quantity: int = Field(gt=0)
@@ -120,6 +147,7 @@ class ReservationUpdate(BaseModel):
     reservation_date: DateType | None = None
     reservation_time: time | None = None
     status: ReservationStatus | None = None
+    fitting_room: int | None = Field(default=None, ge=1)
 
 
 class ReservationItemResponse(ORMModel):
@@ -135,4 +163,9 @@ class ReservationResponse(ORMModel):
     reservation_date: DateType
     reservation_time: time
     status: ReservationStatus
+    fitting_room: int | None = None
+    prepared_at: datetime | None = None
+    assigned_at: datetime | None = None
+    checked_out_at: datetime | None = None
+    refunded_at: datetime | None = None
     items: list[ReservationItemResponse] = []

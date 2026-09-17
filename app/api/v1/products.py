@@ -32,7 +32,9 @@ def edit_category(item_id: int, data: ParameterUpdate, db: Session = Depends(get
 def list_seasons(db: Session = Depends(get_db)): return list(db.scalars(select(Season).order_by(Season.name)).all())
 @router.post('/parameters/seasons', response_model=SeasonResponse, status_code=201, dependencies=[editor])
 def add_season(data: ParameterCreate, db: Session = Depends(get_db)):
-    obj=Season(name=data.name); db.add(obj)
+    if data.start_date and data.end_date and data.end_date < data.start_date:
+        raise HTTPException(422, 'Season end date must be after start date')
+    obj=Season(name=data.name, start_date=data.start_date, end_date=data.end_date); db.add(obj)
     try: db.commit(); db.refresh(obj)
     except IntegrityError: db.rollback(); raise HTTPException(409,'Season already exists')
     return obj
@@ -53,7 +55,10 @@ def delete_category(item_id: int, db: Session = Depends(get_db)):
 def edit_season(item_id: int, data: ParameterUpdate, db: Session = Depends(get_db)):
     obj=db.get(Season,item_id)
     if not obj: raise HTTPException(404,'Season not found')
-    if data.name is not None: obj.name=data.name
+    values = data.model_dump(exclude_unset=True)
+    if values.get('start_date') and values.get('end_date') and values['end_date'] < values['start_date']:
+        raise HTTPException(422, 'Season end date must be after start date')
+    for key, value in values.items(): setattr(obj, key, value)
     db.commit(); db.refresh(obj); return obj
 
 
