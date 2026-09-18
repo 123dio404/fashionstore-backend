@@ -9,7 +9,27 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-The default development database is SQLite (`fashionstore.db`). Set `DATABASE_URL`, `SECRET_KEY`, `CORS_ORIGINS` and `ACCESS_TOKEN_EXPIRE_MINUTES` in the environment for deployment. For migrations:
+The default development database is SQLite (`fashionstore.db`). Set these variables in the environment for deployment:
+
+```dotenv
+DATABASE_URL=sqlite:///./fashionstore.db
+SECRET_KEY=replace-me
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+AI_PROVIDER_MODE=disabled
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.0-flash
+SPEECH_PROVIDER_MODE=disabled
+GOOGLE_SPEECH_API_KEY=
+GOOGLE_SPEECH_LANGUAGE_CODE=es-CO
+```
+
+Set `AI_PROVIDER_MODE=gemini` to enable Gemini for CU18 recommendations, CU19 chatbot,
+and CU24 analytical-query interpretation. Set `SPEECH_PROVIDER_MODE=google` to enable
+`POST /api/v1/reports/analytical-query/voice` (multipart field `audio`). Missing credentials
+or upstream failures return explicit errors; deterministic behavior is used only while the
+corresponding provider mode is `disabled`. Never commit credentials.
+
+For migrations:
 
 ```bash
 alembic upgrade head
@@ -25,7 +45,7 @@ Interactive API documentation is available at `/docs`.
 - **CA**: `Cajero`, responsible for POS sales and in-store reservation handling.
 - **PR**: `Proveedor`, supported as an authenticated profile; supplier catalog operations remain controlled by AD/ES.
 - **PP**: payment provider abstraction (`mock` in development).
-- **IA**: deterministic recommendation, chatbot, and analytical-query services, ready to be replaced by external AI providers.
+- **IA**: Gemini adapter for recommendations, chatbot, and analytical-query interpretation, with an explicit disabled-mode fallback.
 
 ## Modules and requirements
 
@@ -50,3 +70,10 @@ Interactive API documentation is available at `/docs`.
 - `/api/v1/reports`: CU16 and CU21-CU24.
 
 The built-in `mock` payment provider is deterministic and intended for development. Configure a real provider before production use.
+
+## Integraciones externas y configuración
+
+- Pagos: `PAYMENT_PROVIDER=stripe`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` y opcionalmente `STRIPE_API_BASE`. El checkout crea PaymentIntents con `Idempotency-Key`; el webhook es `/api/v1/commerce/payments/stripe/webhook` y verifica firma. `mock` solo se acepta en `development`/`test`.
+- Facturación fiscal: `FISCAL_PROVIDER=not_configured` por defecto. `POST /api/v1/commerce/sales/{id}/invoice` devuelve explícitamente 503 hasta conectar un proveedor; los recibos internos no son facturas fiscales.
+- Notificaciones: `NOTIFICATION_PROVIDER=not_configured` por defecto. `POST /api/v1/commerce/sales/{id}/notifications` devuelve 503 hasta conectar un proveedor; no se afirma entrega.
+- Voz: `SPEECH_PROVIDER_MODE` y `GOOGLE_SPEECH_API_KEY` son opcionales. AR móvil usa modelos `.glb`/`.gltf` mediante ARCore/ARKit; no implementa try-on corporal avanzado.

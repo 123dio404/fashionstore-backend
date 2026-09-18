@@ -28,6 +28,8 @@ from app.schemas.commerce import (
     PaymentStatus,
     ReceiptResponse,
 )
+from app.providers import get_payment_provider
+from app.core.config import settings
 
 
 class MockPaymentProvider:
@@ -135,44 +137,80 @@ def remove_cart_item(db: Session, user_id: int, item_id: int) -> CartResponse:
 def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
     if db.get(Branch, data.branch_id) is None:
         raise HTTPException(404, "Branch not found")
-    cart = get_or_create_cart(db, user_id)
+    cart = db.scalar(
+        select(Cart).where(Cart.user_id == user_id, Cart.status == "activo").with_for_update()
+    ) or get_or_create_cart(db, user_id)
     if not cart.items:
         raise HTTPException(400, "Cart is empty")
     total = Decimal("0")
+    locked_items = []
     for ci in cart.items:
-        if ci.quantity > (ci.stock.physical_stock - ci.stock.reserved_stock):
+        stock = db.scalar(select(Stock).where(Stock.id == ci.stock_id).with_for_update())
+        if stock is None or ci.quantity > stock.physical_stock - stock.reserved_stock:
             raise HTTPException(409, f"Insufficient stock for {ci.stock_id}")
+        locked_items.append((ci, stock))
         total += ci.price * ci.quantity
-    provider = PAYMENT_PROVIDERS.get(data.payment_provider)
-    if provider is None:
-        raise HTTPException(400, f"Unsupported payment provider: {data.payment_provider}")
-    payment = provider.charge(total, data.payment_status, data.payment_reference)
     sale = Sale(client_id=user_id, user_id=user_id, branch_id=data.branch_id, total=total, sale_type="digital")
-    sale.payments.append(
-        SalePayment(amount=total, status=payment["status"], paid_at=payment["paid_at"],
-                    reference=payment["reference"] or f"ORD-{user_id}-{datetime.now().timestamp():.0f}")
-    )
-    if data.payment_status != PaymentStatus.COMPLETADO:
-        db.add(sale)
-        db.commit()
-        db.refresh(sale)
-        return sale
-    for ci in cart.items:
-        ci.stock.physical_stock -= ci.quantity
-        sale.items.append(SaleItem(stock_id=ci.stock_id, quantity=ci.quantity, unit_price=ci.price))
-        db.add(
-            InventoryMovement(
-                movement_type=MovementType.VENTA,
-                inventory_id=ci.stock.id,
-                quantity=-ci.quantity,
-                reason="Venta digital",
-            )
-        )
     db.add(sale)
     db.flush()
-    if sale.payments[0].reference is None:
-        sale.payments[0].reference = f"ORD-{sale.id:012d}"
-    cart.status = "completado"
+    provider = get_payment_provider(data.payment_provider)
+    intent = provider.create_intent(
+        total, "usd", data.idempotency_key or f"sale-{sale.id}", {"sale_id": sale.id}
+    )
+    status = PaymentStatus.COMPLETADO.value if intent.get("status") == "succeeded" else PaymentStatus.PENDIENTE.value
+    sale.payments.append(SalePayment(amount=total, status=status, paid_at=datetime.now(timezone.utc) if status == "completado" else None,
+                                     reference=intent.get("id") or data.payment_reference))
+    if status == PaymentStatus.COMPLETADO.value:
+        for ci, stock in locked_items:
+            stock.physical_stock -= ci.quantity
+            sale.items.append(SaleItem(stock_id=ci.stock_id, quantity=ci.quantity, unit_price=ci.price))
+            db.add(InventoryMovement(movement_type=MovementType.VENTA, inventory_id=stock.id, quantity=-ci.quantity, reason="Venta digital"))
+        cart.status = "completado"
+    db.commit()
+    db.refresh(sale)
+    return sale
+
+
+def apply_payment_event(db: Session, event: dict) -> Sale | None:
+    obj = event.get("data", {}).get("object", {})
+    intent_id = obj.get("id")
+    if not intent_id:
+        return None
+    sale = db.scalar(select(Sale).join(SalePayment).where(SalePayment.reference == intent_id).with_for_update())
+    if sale is None or not sale.payments:
+        return None
+    payment = sale.payments[-1]
+    event_type = event.get("type", "")
+    if event_type == "payment_intent.succeeded" and payment.status != PaymentStatus.COMPLETADO.value:
+        cart = db.scalar(select(Cart).where(Cart.user_id == sale.client_id, Cart.status == "activo").with_for_update())
+        if cart:
+            for ci in cart.items:
+                stock = db.scalar(select(Stock).where(Stock.id == ci.stock_id).with_for_update())
+                if stock is None or ci.quantity > stock.available_stock:
+                    payment.status = PaymentStatus.FALLIDO.value
+                    db.commit()
+                    return sale
+                stock.physical_stock -= ci.quantity
+                sale.items.append(SaleItem(stock_id=ci.stock_id, quantity=ci.quantity, unit_price=ci.price))
+                db.add(InventoryMovement(movement_type=MovementType.VENTA, inventory_id=stock.id, quantity=-ci.quantity, reason="Stripe payment"))
+            cart.status = "completado"
+        payment.status = PaymentStatus.COMPLETADO.value
+        payment.paid_at = datetime.now(timezone.utc)
+    elif event_type in {"payment_intent.payment_failed", "payment_intent.canceled"}:
+        payment.status = PaymentStatus.FALLIDO.value
+    elif event_type == "charge.refunded":
+        if payment.status == PaymentStatus.COMPLETADO.value:
+            for item in sale.items:
+                stock = db.scalar(select(Stock).where(Stock.id == item.stock_id).with_for_update())
+                if stock is not None:
+                    stock.physical_stock += item.quantity
+                    db.add(InventoryMovement(
+                        movement_type=MovementType.AJUSTE,
+                        inventory_id=stock.id,
+                        quantity=item.quantity,
+                        reason="Stripe refund",
+                    ))
+        payment.status = PaymentStatus.REEMBOLSADO.value
     db.commit()
     db.refresh(sale)
     return sale
@@ -213,18 +251,27 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
         entries.append((stock, inp.quantity, unit_price))
     if total <= 0:
         raise HTTPException(400, "Sale total must be positive")
-    provider = PAYMENT_PROVIDERS.get(data.payment_provider)
-    if provider is None:
-        raise HTTPException(400, f"Unsupported payment provider: {data.payment_provider}")
     requested_status = data.payment_status or (
         PaymentStatus.COMPLETADO if data.paid else PaymentStatus.PENDIENTE
     )
-    payment = provider.charge(total, requested_status, data.payment_reference)
     sale = Sale(client_id=data.client_id, user_id=user_id, branch_id=data.branch_id, total=total, sale_type="pos")
-    sale.payments.append(SalePayment(amount=total, status=payment["status"],
-                                     paid_at=payment["paid_at"], reference=payment["reference"]))
-    if requested_status != PaymentStatus.COMPLETADO:
-        db.add(sale)
+    db.add(sale)
+    db.flush()
+    if data.payment_provider == "mock":
+        if settings.environment.casefold() not in {"development", "test"}:
+            raise HTTPException(400, "Mock payment provider is only available in development or test")
+        payment = PAYMENT_PROVIDERS["mock"].charge(total, requested_status, data.payment_reference)
+        payment_status, reference = payment["status"], payment["reference"]
+    else:
+        intent = get_payment_provider(data.payment_provider).create_intent(
+            total, "usd", data.payment_reference or f"pos-{sale.id}", {"sale_id": sale.id}
+        )
+        payment_status = PaymentStatus.COMPLETADO.value if intent.get("status") == "succeeded" else PaymentStatus.PENDIENTE.value
+        reference = intent.get("id")
+    sale.payments.append(SalePayment(amount=total, status=payment_status,
+                                     paid_at=datetime.now(timezone.utc) if payment_status == PaymentStatus.COMPLETADO.value else None,
+                                     reference=reference))
+    if payment_status != PaymentStatus.COMPLETADO.value:
         db.commit()
         db.refresh(sale)
         return sale

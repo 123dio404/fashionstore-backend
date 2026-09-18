@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_role
@@ -8,7 +8,9 @@ from app.models.user import Role, User
 from app.schemas.reporting import (
     AnalyticalQueryRequest, AnalyticalQueryResponse, DashboardResponse,
     InventoryReportResponse, PurchaseHistoryResponse, SalesReportResponse,
+    SpeechAnalyticalQueryResponse,
 )
+from app.providers import get_speech_provider
 from app.services import reporting_service as service
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -48,3 +50,18 @@ def executive_dashboard(start_date: datetime | None = None, end_date: datetime |
 @router.post("/analytical-query", response_model=AnalyticalQueryResponse, dependencies=[admin_report_access])
 def analytical_query(data: AnalyticalQueryRequest, db: Session = Depends(get_db)):
     return service.analytical_query(db, data.query, data.client_id, data.start_date, data.end_date, data.audio)
+
+
+@router.post("/analytical-query/voice", response_model=SpeechAnalyticalQueryResponse, dependencies=[admin_report_access])
+async def analytical_query_voice(
+    audio: UploadFile = File(...),
+    client_id: int | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    transcript = get_speech_provider().transcribe(
+        await audio.read(), audio.content_type or "audio/wav"
+    )
+    result = service.analytical_query(
+        db, transcript, client_id=client_id, audio={"filename": audio.filename}
+    )
+    return {"transcript": transcript, **result}

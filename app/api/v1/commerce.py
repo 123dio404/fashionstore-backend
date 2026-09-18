@@ -1,6 +1,6 @@
 from datetime import date as DateType
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_role
@@ -19,10 +19,38 @@ from app.schemas.commerce import (
     ReceiptResponse,
 )
 from app.services import commerce_service
+from app.providers import get_payment_provider, get_fiscal_provider, get_notification_provider
 
 router = APIRouter(prefix='/commerce', tags=['commerce'])
 staff = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO, Role.CAJERO))
 PRIVILEGED = (Role.ADMINISTRADOR, Role.ENCARGADO, Role.CAJERO)
+RESERVATION_STAFF = (Role.ENCARGADO, Role.CAJERO)
+
+
+@router.post('/payments/stripe/webhook', include_in_schema=False)
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    payload = await request.body()
+    signature = request.headers.get("stripe-signature", "")
+    event = get_payment_provider("stripe").verify_webhook(payload, signature)
+    commerce_service.apply_payment_event(db, event)
+    return {"received": True}
+
+
+@router.post('/sales/{sale_id}/invoice')
+def issue_invoice(sale_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    sale = commerce_service.get_sale(db, sale_id)
+    if user.role not in PRIVILEGED and sale.client_id != user.id:
+        raise HTTPException(status_code=403, detail='Insufficient permissions')
+    return get_fiscal_provider().issue_invoice(sale=sale)
+
+
+@router.post('/sales/{sale_id}/notifications')
+def send_sale_notification(sale_id: int, channel: str = "email",
+                           user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    sale = commerce_service.get_sale(db, sale_id)
+    if user.role not in PRIVILEGED and sale.client_id != user.id:
+        raise HTTPException(status_code=403, detail='Insufficient permissions')
+    return get_notification_provider().send(event="sale.updated", sale_id=sale.id, channel=channel)
 
 
 @router.get('/cart', response_model=CartResponse)
@@ -103,7 +131,7 @@ def list_reservations(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if user.role not in PRIVILEGED:
+    if user.role not in RESERVATION_STAFF:
         return commerce_service.list_reservations(db, user.id, status.value if status else None, branch_id, reservation_date)
     return commerce_service.list_reservations(db, None, status.value if status else None, branch_id, reservation_date)
 
@@ -120,7 +148,7 @@ def get_reservation(
     reservation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     reservation = commerce_service.get_reservation(db, reservation_id)
-    if user.role not in PRIVILEGED and reservation.client_id != user.id:
+    if user.role not in RESERVATION_STAFF and reservation.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     return reservation
 
@@ -133,7 +161,7 @@ def update_reservation(
     db: Session = Depends(get_db),
 ):
     reservation = commerce_service.get_reservation(db, reservation_id)
-    if user.role not in PRIVILEGED:
+    if user.role not in RESERVATION_STAFF:
         if reservation.client_id != user.id:
             raise HTTPException(status_code=403, detail='Insufficient permissions')
         if data.status is not None and data.status is not ReservationStatus.CANCELADA:
@@ -146,6 +174,6 @@ def delete_reservation(
     reservation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     reservation = commerce_service.get_reservation(db, reservation_id)
-    if user.role not in PRIVILEGED and reservation.client_id != user.id:
+    if user.role not in RESERVATION_STAFF and reservation.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     commerce_service.delete_reservation(db, reservation_id)

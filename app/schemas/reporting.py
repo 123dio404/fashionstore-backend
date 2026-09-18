@@ -100,3 +100,7 @@ class AnalyticalQueryResponse(BaseModel):
     intent: str
     parameters: dict[str, Any]
     result: dict[str, Any]
+
+
+class SpeechAnalyticalQueryResponse(AnalyticalQueryResponse):
+    transcript: str

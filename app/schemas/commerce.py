@@ -69,9 +69,10 @@ class CartResponse(BaseModel):
 
 class CheckoutRequest(BaseModel):
     branch_id: int
-    payment_provider: str = "mock"
-    payment_status: PaymentStatus = PaymentStatus.COMPLETADO
+    payment_provider: str = "stripe"
+    payment_status: PaymentStatus = PaymentStatus.PENDIENTE
     payment_reference: str | None = None
+    idempotency_key: str | None = None
 
 
 class SaleItemInput(BaseModel):
@@ -84,7 +85,7 @@ class PosSaleCreate(BaseModel):
     client_id: int
     items: list[SaleItemInput] = Field(min_length=1)
     paid: bool = True
-    payment_provider: str = "mock"
+    payment_provider: str = "stripe"
     payment_status: PaymentStatus | None = None
     payment_reference: str | None = None
 

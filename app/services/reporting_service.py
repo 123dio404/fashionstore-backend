@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.commerce import Sale, SaleItem
 from app.models.inventory import Stock
 from app.models.product import Product, ProductVariant
+from app.providers import get_ai_provider
 
 
 def _date_range(start_date, end_date):
@@ -147,7 +148,30 @@ def analytical_query(db: Session, query: str, client_id=None, start_date=None, e
     parameters = {"client_id": client_id, "start_date": start_date, "end_date": end_date}
     if audio is not None:
         parameters["audio"] = audio
-    if re.search(r"\b(inventario|stock|existencias)\b", normalized):
+    provider = get_ai_provider()
+    if provider.__class__.__name__ != "DisabledAIProvider":
+        interpretation = provider.generate_json(
+            "Classify this FashionStore analytical query. Return JSON with intent equal to "
+            "one of inventory, purchase_history, dashboard, sales, and optional client_id. "
+            f"Query: {query}"
+        )
+        intent_hint = interpretation.get("intent", "sales")
+        if intent_hint == "purchase_history" and client_id is None:
+            client_id = interpretation.get("client_id")
+        normalized = intent_hint
+    if normalized in {"inventory", "purchase_history", "dashboard", "sales"}:
+        intent = normalized
+        if intent == "inventory":
+            result = inventory_report(db)
+        elif intent == "purchase_history":
+            if client_id is None:
+                raise HTTPException(422, "client_id is required for purchase history queries")
+            result = purchase_history(db, client_id, start_date, end_date)
+        elif intent == "dashboard":
+            result = dashboard(db, start_date, end_date)
+        else:
+            result = sales_report(db, start_date, end_date)
+    elif re.search(r"\b(inventario|stock|existencias|inventory)\b", normalized):
         intent, result = "inventory", inventory_report(db)
     elif re.search(r"\b(historial|compras|compr[ée])\b", normalized):
         if client_id is None:

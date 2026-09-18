@@ -16,6 +16,7 @@ from app.models.customer_experience import (
 )
 from app.models.inventory import Stock
 from app.models.product import Category, Product, ProductVariant, Size
+from app.providers import get_ai_provider
 from app.schemas.customer_experience import (
     UserPreferenceUpsert,
     VirtualFittingResultCreate,
@@ -140,6 +141,22 @@ def generate_recommendations(db: Session, user_id: int, limit: int = 10) -> Reco
         score += min(10, Decimal(available))
         scored.append((product, score, ", ".join(reasons) or "disponibilidad"))
     scored.sort(key=lambda item: (-item[1], item[0].id))
+    if get_ai_provider().__class__.__name__ != "DisabledAIProvider":
+        prompt = (
+            "You are FashionStore's recommendation engine. Rank products for a customer. "
+            "Return JSON {\"products\":[{\"id\":number,\"reason\":\"short reason\"}]}. "
+            f"Customer preferences: {preference and preference.__dict__}. "
+            f"Products: {[{'id': p.id, 'name': p.name, 'price': str(p.price), 'category_id': p.category_id} for p, _, _ in scored]}"
+        )
+        ranked = get_ai_provider().generate_json(prompt).get("products", [])
+        by_id = {product.id: (product, score, reason) for product, score, reason in scored}
+        ai_scored = []
+        for item in ranked:
+            if isinstance(item, dict) and item.get("id") in by_id:
+                product, score, default_reason = by_id[item["id"]]
+                ai_scored.append((product, score, str(item.get("reason") or default_reason)))
+        if ai_scored:
+            scored = ai_scored + [item for item in scored if item[0].id not in {x[0].id for x in ai_scored}]
     recommendation = Recommendation(user_id=user_id, recommendation_type="personalizada")
     recommendation.items = [
         RecommendationItem(product_id=product.id, score=score, reason=reason)
@@ -237,17 +254,24 @@ def get_chat_conversation(db: Session, conversation_id: int, user_id: int, privi
 
 def send_chat_message(db: Session, conversation: ChatConversation, content: str, context=None):
     db.add(ChatMessage(conversation_id=conversation.id, role="user", content=content, context=context))
-    lowered = content.lower()
-    if any(word in lowered for word in ("pedido", "orden", "compra")):
-        answer = "Puedo ayudarte a revisar tus pedidos. Consulta el estado desde tu historial de compras."
-    elif any(word in lowered for word in ("talla", "tamaño", "size")):
-        answer = "Para elegir talla, revisa la guía de tallas del producto o usa la recomendación personalizada."
-    elif any(word in lowered for word in ("promo", "descuento", "oferta")):
-        answer = "Consulta las promociones activas para conocer descuentos disponibles."
-    elif any(word in lowered for word in ("hola", "buenas")):
-        answer = "¡Hola! Puedo ayudarte con productos, tallas, pedidos y promociones."
+    provider = get_ai_provider()
+    if provider.__class__.__name__ != "DisabledAIProvider":
+        answer = provider.generate_text(
+            "You are FashionStore customer support. Answer in Spanish, briefly and safely, "
+            f"using this context when relevant: {context or conversation.context or {}}. User: {content}"
+        )
     else:
-        answer = "Puedo ayudarte con productos, recomendaciones, tallas, pedidos y promociones. ¿Qué necesitas?"
+        lowered = content.lower()
+        if any(word in lowered for word in ("pedido", "orden", "compra")):
+            answer = "Puedo ayudarte a revisar tus pedidos. Consulta el estado desde tu historial de compras."
+        elif any(word in lowered for word in ("talla", "tamaño", "size")):
+            answer = "Para elegir talla, revisa la guía de tallas del producto o usa la recomendación personalizada."
+        elif any(word in lowered for word in ("promo", "descuento", "oferta")):
+            answer = "Consulta las promociones activas para conocer descuentos disponibles."
+        elif any(word in lowered for word in ("hola", "buenas")):
+            answer = "¡Hola! Puedo ayudarte con productos, tallas, pedidos y promociones."
+        else:
+            answer = "Puedo ayudarte con productos, recomendaciones, tallas, pedidos y promociones. ¿Qué necesitas?"
     assistant_message = ChatMessage(conversation_id=conversation.id, role="assistant", content=answer, context=context)
     db.add(assistant_message)
     db.commit()
