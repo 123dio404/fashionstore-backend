@@ -20,6 +20,7 @@ from app.models.operations import (
 )
 from app.models.product import Category, Color, Product, ProductVariant, Season, Size
 from app.models.customer_experience import (
+    ChatConversation, ChatMessage,
     FittingSessionStatus,
     Recommendation,
     RecommendationItem,
@@ -27,6 +28,7 @@ from app.models.customer_experience import (
     VirtualFittingResult,
     VirtualFittingSession,
 )
+from app.models.marketing import Collection, Promotion
 from app.models.supplier import ProductSupplier, Supplier
 from app.models.user import Role, Rol, User, UsuarioRol
 
@@ -35,9 +37,12 @@ __all__ = [
     "BranchHour",
     "Cart",
     "CartItem",
+    "ChatConversation",
+    "ChatMessage",
     "Category",
     "City",
     "Color",
+    "Collection",
     "FittingSessionStatus",
     "Facility",
     "FacilityReservation",
@@ -56,6 +61,7 @@ __all__ = [
     "Product",
     "ProductSupplier",
     "ProductVariant",
+    "Promotion",
     "Recommendation",
     "RecommendationItem",
     "Reservation",

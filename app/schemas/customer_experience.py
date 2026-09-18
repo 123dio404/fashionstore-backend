@@ -101,3 +101,34 @@ class ExecutiveAnalyticsResponse(BaseModel):
     average_order_value: Decimal
     channels: list[AnalyticsChannel]
     inventory_rotation: list[InventoryRotation]
+
+
+class ChatConversationCreate(BaseModel):
+    title: str | None = Field(default=None, max_length=150)
+    context: dict[str, Any] | None = None
+
+
+class ChatMessageCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=4000)
+    context: dict[str, Any] | None = None
+
+
+class ChatMessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    conversation_id: int
+    role: str
+    content: str
+    context: dict[str, Any] | None
+    created_at: datetime
+
+
+class ChatConversationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    title: str | None
+    context: dict[str, Any] | None
+    created_at: datetime
+    updated_at: datetime
+    messages: list[ChatMessageResponse] = []

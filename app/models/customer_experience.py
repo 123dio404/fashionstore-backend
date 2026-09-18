@@ -114,3 +114,27 @@ class RecommendationItem(Base):
 
     recommendation: Mapped["Recommendation"] = relationship(back_populates="items")
     product: Mapped["Product"] = relationship()
+
+
+class ChatConversation(Base):
+    __tablename__ = "conversacion_chatbot"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column("id_usuario", ForeignKey("usuario.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str | None] = mapped_column("titulo", String(150), nullable=True)
+    context: Mapped[dict[str, Any] | None] = mapped_column("contexto", JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column("fecha_creacion", DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column("fecha_actualizacion", DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    messages: Mapped[list["ChatMessage"]] = relationship(back_populates="conversation", cascade="all, delete-orphan", order_by="ChatMessage.id")
+
+
+class ChatMessage(Base):
+    __tablename__ = "mensaje_chatbot"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    conversation_id: Mapped[int] = mapped_column("id_conversacion", ForeignKey("conversacion_chatbot.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column("rol", String(20), nullable=False)
+    content: Mapped[str] = mapped_column("contenido", Text, nullable=False)
+    context: Mapped[dict[str, Any] | None] = mapped_column("contexto", JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column("fecha_creacion", DateTime(timezone=True), server_default=func.now(), nullable=False)
+    conversation: Mapped["ChatConversation"] = relationship(back_populates="messages")

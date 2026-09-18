@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.commerce import Sale, SaleItem
 from app.models.customer_experience import (
+    ChatConversation, ChatMessage,
     Recommendation,
     RecommendationItem,
     UserPreference,
@@ -209,3 +210,46 @@ def executive_analytics(db: Session, start_date, end_date) -> dict:
         "channels": [{"channel": key, **value} for key, value in sorted(channel_rows.items())],
         "inventory_rotation": rotation,
     }
+
+
+def create_chat_conversation(db: Session, user_id: int, title=None, context=None):
+    conversation = ChatConversation(user_id=user_id, title=title, context=context)
+    db.add(conversation)
+    db.commit()
+    db.refresh(conversation)
+    return conversation
+
+
+def list_chat_conversations(db: Session, user_id: int):
+    return list(db.scalars(select(ChatConversation).options(selectinload(ChatConversation.messages)).where(ChatConversation.user_id == user_id).order_by(ChatConversation.updated_at.desc())).all())
+
+
+def get_chat_conversation(db: Session, conversation_id: int, user_id: int, privileged=False):
+    conversation = db.scalar(
+        select(ChatConversation).options(selectinload(ChatConversation.messages)).where(ChatConversation.id == conversation_id)
+    )
+    if conversation is None:
+        raise HTTPException(404, "Chat conversation not found")
+    if not privileged and conversation.user_id != user_id:
+        raise HTTPException(403, "Insufficient permissions")
+    return conversation
+
+
+def send_chat_message(db: Session, conversation: ChatConversation, content: str, context=None):
+    db.add(ChatMessage(conversation_id=conversation.id, role="user", content=content, context=context))
+    lowered = content.lower()
+    if any(word in lowered for word in ("pedido", "orden", "compra")):
+        answer = "Puedo ayudarte a revisar tus pedidos. Consulta el estado desde tu historial de compras."
+    elif any(word in lowered for word in ("talla", "tamaño", "size")):
+        answer = "Para elegir talla, revisa la guía de tallas del producto o usa la recomendación personalizada."
+    elif any(word in lowered for word in ("promo", "descuento", "oferta")):
+        answer = "Consulta las promociones activas para conocer descuentos disponibles."
+    elif any(word in lowered for word in ("hola", "buenas")):
+        answer = "¡Hola! Puedo ayudarte con productos, tallas, pedidos y promociones."
+    else:
+        answer = "Puedo ayudarte con productos, recomendaciones, tallas, pedidos y promociones. ¿Qué necesitas?"
+    assistant_message = ChatMessage(conversation_id=conversation.id, role="assistant", content=answer, context=context)
+    db.add(assistant_message)
+    db.commit()
+    db.refresh(assistant_message)
+    return assistant_message

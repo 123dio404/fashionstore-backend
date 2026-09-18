@@ -7,6 +7,7 @@ from app.api.deps import get_current_user, get_db, require_role
 from app.models.customer_experience import FittingSessionStatus
 from app.models.user import Role, User
 from app.schemas.customer_experience import (
+    ChatConversationCreate, ChatConversationResponse, ChatMessageCreate, ChatMessageResponse,
     ExecutiveAnalyticsResponse,
     RecommendationResponse,
     UserPreferenceResponse,
@@ -25,6 +26,7 @@ privileged_roles = {Role.ADMINISTRADOR, Role.ENCARGADO, Role.CAJERO}
 
 
 @router.post("/fitting/sessions", response_model=VirtualFittingSessionResponse, status_code=201)
+@router.post("/virtual-fitting/sessions", response_model=VirtualFittingSessionResponse, status_code=201)
 def create_fitting_session(
     data: VirtualFittingSessionCreate,
     user: User = Depends(get_current_user),
@@ -34,6 +36,7 @@ def create_fitting_session(
 
 
 @router.get("/fitting/sessions/{session_id}", response_model=VirtualFittingSessionResponse)
+@router.get("/virtual-fitting/sessions/{session_id}", response_model=VirtualFittingSessionResponse)
 def get_fitting_session(session_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return service.get_fitting_session(db, session_id, user.id, user.role in privileged_roles)
 
@@ -43,6 +46,7 @@ def get_fitting_session(session_id: int, user: User = Depends(get_current_user),
     response_model=VirtualFittingResultResponse,
     status_code=201,
 )
+@router.post("/virtual-fitting/sessions/{session_id}/results", response_model=VirtualFittingResultResponse, status_code=201)
 def add_fitting_result(
     session_id: int,
     data: VirtualFittingResultCreate,
@@ -79,12 +83,34 @@ def save_user_preferences(
 
 
 @router.post("/recommendations", response_model=RecommendationResponse, status_code=201)
+@router.post("/recommendations/generate", response_model=RecommendationResponse, status_code=201)
 def generate_recommendations(
     limit: int = Query(default=10, ge=1, le=50),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     return service.generate_recommendations(db, user.id, limit)
+
+
+@router.post("/chatbot/conversations", response_model=ChatConversationResponse, status_code=201)
+def create_chat_conversation(data: ChatConversationCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return service.create_chat_conversation(db, user.id, data.title, data.context)
+
+
+@router.get("/chatbot/conversations", response_model=list[ChatConversationResponse])
+def list_chat_conversations(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return service.list_chat_conversations(db, user.id)
+
+
+@router.get("/chatbot/conversations/{conversation_id}", response_model=ChatConversationResponse)
+def get_chat_conversation(conversation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return service.get_chat_conversation(db, conversation_id, user.id, user.role in privileged_roles)
+
+
+@router.post("/chatbot/conversations/{conversation_id}/messages", response_model=ChatMessageResponse, status_code=201)
+def send_chat_message(conversation_id: int, data: ChatMessageCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    conversation = service.get_chat_conversation(db, conversation_id, user.id, user.role in privileged_roles)
+    return service.send_chat_message(db, conversation, data.content, data.context)
 
 
 @router.get("/analytics/executive", response_model=ExecutiveAnalyticsResponse, dependencies=[staff])
