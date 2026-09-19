@@ -14,7 +14,7 @@ def list_suppliers(db:Session=Depends(get_db)): return list(db.scalars(select(Su
 def add_supplier(data:SupplierCreate,db:Session=Depends(get_db)):
     obj=Supplier(**data.model_dump()); db.add(obj)
     try: db.commit(); db.refresh(obj)
-    except IntegrityError: db.rollback(); raise HTTPException(409,'Tax ID already exists')
+    except IntegrityError: db.rollback(); raise HTTPException(409,'CI already exists')
     return obj
 @router.get('/{supplier_id}',response_model=SupplierResponse)
 def get_supplier(supplier_id: int,db:Session=Depends(get_db)):
@@ -27,7 +27,7 @@ def edit_supplier(supplier_id: int,data:SupplierUpdate,db:Session=Depends(get_db
     if not obj: raise HTTPException(404,'Supplier not found')
     for k,v in data.model_dump(exclude_unset=True).items(): setattr(obj,k,v)
     try: db.commit(); db.refresh(obj)
-    except IntegrityError: db.rollback(); raise HTTPException(409,'Tax ID already exists')
+    except IntegrityError: db.rollback(); raise HTTPException(409,'CI already exists')
     return obj
 @router.delete('/{supplier_id}',status_code=204,dependencies=[editor])
 def delete_supplier(supplier_id: int,db:Session=Depends(get_db)):
