@@ -28,7 +28,7 @@ from app.schemas.commerce import (
     PaymentStatus,
     ReceiptResponse,
 )
-from app.providers import get_payment_provider
+from app.providers import IN_STORE_PAYMENT_METHODS, get_payment_provider
 from app.core.config import settings
 
 
@@ -257,13 +257,22 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
     sale = Sale(client_id=data.client_id, user_id=user_id, branch_id=data.branch_id, total=total, sale_type="pos")
     db.add(sale)
     db.flush()
-    if data.payment_provider == "mock":
+    provider_name = (data.payment_provider or settings.payment_provider).casefold()
+    if provider_name in IN_STORE_PAYMENT_METHODS:
+        # RF18: el cobro en caja no pasa por pasarela. El cajero confirma el pago (efectivo,
+        # tarjeta o datáfono), el estado lo fijan `paid`/`payment_status` y la referencia es el
+        # comprobante interno POS-<venta>.
+        intent = get_payment_provider(provider_name).create_intent(
+            total, "usd", data.payment_reference or f"pos-{sale.id}", {"sale_id": sale.id}
+        )
+        payment_status, reference = requested_status.value, intent.get("id")
+    elif provider_name == "mock":
         if settings.environment.casefold() not in {"development", "test"}:
             raise HTTPException(400, "Mock payment provider is only available in development or test")
         payment = PAYMENT_PROVIDERS["mock"].charge(total, requested_status, data.payment_reference)
         payment_status, reference = payment["status"], payment["reference"]
     else:
-        intent = get_payment_provider(data.payment_provider).create_intent(
+        intent = get_payment_provider(provider_name).create_intent(
             total, "usd", data.payment_reference or f"pos-{sale.id}", {"sale_id": sale.id}
         )
         payment_status = PaymentStatus.COMPLETADO.value if intent.get("status") == "succeeded" else PaymentStatus.PENDIENTE.value

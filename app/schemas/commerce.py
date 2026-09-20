@@ -132,6 +132,24 @@ class ReceiptResponse(BaseModel):
     items: list[SaleItemResponse]
 
 
+class InvoiceResponse(BaseModel):
+    """Documento fiscal de una venta (proveedor `simulated` o uno real conectado después)."""
+    provider: str
+    invoice_number: str
+    sale_id: int
+    issued_at: datetime
+    issuer_name: str
+    issuer_tax_id: str | None
+    customer_id: int
+    tax_rate: Decimal
+    subtotal: Decimal
+    tax: Decimal
+    total: Decimal
+    payment_status: PaymentStatus
+    payment_reference: str | None
+    disclaimer: str
+
+
 class ReservationItemInput(BaseModel):
     stock_id: int
     quantity: int = Field(gt=0)
