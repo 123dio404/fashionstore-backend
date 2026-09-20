@@ -15,7 +15,7 @@ from app.models.customer_experience import (
     VirtualFittingSession,
 )
 from app.models.inventory import Stock
-from app.models.product import Category, Product, ProductVariant, Size
+from app.models.product import Category, Product, ProductVariant, Season, Size
 from app.providers import get_ai_provider
 from app.schemas.customer_experience import (
     UserPreferenceUpsert,
@@ -95,8 +95,90 @@ def get_preferences(db: Session, user_id: int) -> UserPreference | None:
     return db.scalar(select(UserPreference).where(UserPreference.user_id == user_id))
 
 
+# ── CU18: pesos del recomendador ───────────────────────────────────────────
+# El documento define CU18 como sugerencias basadas en el historial del cliente,
+# la temporada y la disponibilidad; RF25 añade las preferencias del cliente.
+# Total máximo = 100 puntos.
+CU18_WEIGHT_CATEGORY = Decimal("25")      # categoría favorita
+CU18_WEIGHT_BRAND = Decimal("20")         # marca favorita
+CU18_WEIGHT_HISTORY = Decimal("20")       # historial de compras
+CU18_WEIGHT_SIZE = Decimal("10")          # talla preferida con stock
+CU18_WEIGHT_COLOR = Decimal("10")         # color preferido con stock
+CU18_WEIGHT_SEASON = Decimal("5")         # temporada activa
+CU18_WEIGHT_AVAILABILITY = Decimal("10")  # disponibilidad en tienda
+CU18_MAX_SCORE = Decimal("100")
+
+# Motivos que se exponen en `detalle_recomendacion.motivo` y clasifican el `tipo`.
+STYLE_REASONS = ("categoría preferida", "marca preferida", "talla preferida", "color preferido")
+HISTORY_REASON = "historial de compras"
+SEASONAL_REASON = "temporada"
+
+
+def _active_season_ids(db: Session) -> set[int]:
+    """Temporada comercial vigente hoy (fecha_inicio <= hoy <= fecha_fin)."""
+    today = datetime.now(timezone.utc).date()
+    return {
+        season_id
+        for season_id, start_date, end_date in db.execute(
+            select(Season.id, Season.start_date, Season.end_date)
+        ).all()
+        if start_date is not None and end_date is not None and start_date <= today <= end_date
+    }
+
+
+def _preferred_size_ids(preference: UserPreference | None) -> set[int]:
+    """`tallas_preferidas` guarda IDs de `tallas.id` (JSON de enteros)."""
+    if preference is None or not preference.preferred_sizes:
+        return set()
+    ids: set[int] = set()
+    for value in preference.preferred_sizes:
+        try:
+            ids.add(int(value))
+        except (TypeError, ValueError):
+            continue
+    return ids
+
+
+def _preferred_color_names(preference: UserPreference | None) -> set[str]:
+    """`colores_preferidos` guarda nombres de color en texto libre."""
+    if preference is None or not preference.preferred_colors:
+        return set()
+    return {str(value).strip().casefold() for value in preference.preferred_colors if str(value).strip()}
+
+
+def _variant_available(variant: ProductVariant) -> int:
+    return sum(stock.available_stock for stock in variant.stocks)
+
+
+def _recommendation_type(reasons: list[str]) -> str:
+    """`recomendacion.tipo`: categoría o tipo de recomendación estilística (documento)."""
+    if any(reason in reasons for reason in STYLE_REASONS):
+        return "estilo"
+    if HISTORY_REASON in reasons:
+        return "historial"
+    if SEASONAL_REASON in reasons:
+        return "temporada"
+    return "disponibilidad"
+
+
+def _preference_payload(preference: UserPreference | None) -> dict | None:
+    if preference is None:
+        return None
+    return {
+        "category_id": preference.category_id,
+        "preferred_brand": preference.preferred_brand,
+        "preferred_colors": preference.preferred_colors,
+        "preferred_sizes": preference.preferred_sizes,
+        "min_price": str(preference.min_price) if preference.min_price is not None else None,
+        "max_price": str(preference.max_price) if preference.max_price is not None else None,
+    }
+
+
 def generate_recommendations(db: Session, user_id: int, limit: int = 10) -> Recommendation:
     preference = get_preferences(db, user_id)
+    active_seasons = _active_season_ids(db)
+    preferred_sizes = _preferred_size_ids(preference)
+    preferred_colors = _preferred_color_names(preference)
     purchased_categories = {
         row[0]: row[1]
         for row in db.execute(
@@ -112,64 +194,134 @@ def generate_recommendations(db: Session, user_id: int, limit: int = 10) -> Reco
     products = list(
         db.scalars(
             select(Product)
-            .options(selectinload(Product.variants).selectinload(ProductVariant.stocks))
+            .options(
+                selectinload(Product.variants).selectinload(ProductVariant.stocks),
+                selectinload(Product.variants).selectinload(ProductVariant.color),
+            )
             .where(Product.is_active.is_(True))
             .order_by(Product.id)
         ).all()
     )
-    scored: list[tuple[Product, Decimal, str]] = []
+    # (producto, puntaje, motivo, tipo de recomendación, stock disponible)
+    scored: list[tuple[Product, Decimal, str, str, int]] = []
     for product in products:
-        available = sum(stock.available_stock for variant in product.variants for stock in variant.stocks)
+        available = sum(_variant_available(variant) for variant in product.variants)
         if available <= 0:
-            continue
-        score = Decimal("0")
-        reasons: list[str] = []
+            continue  # agotado: el documento condiciona la sugerencia a la disponibilidad
         if preference:
-            if preference.category_id == product.category_id:
-                score += 40
-                reasons.append("categoría preferida")
-            if preference.preferred_brand and preference.preferred_brand.lower() == (product.brand or "").lower():
-                score += 25
-                reasons.append("marca preferida")
             if preference.min_price is not None and product.price < preference.min_price:
                 continue
             if preference.max_price is not None and product.price > preference.max_price:
                 continue
-        if product.category_id in purchased_categories:
-            score += min(25, Decimal(purchased_categories[product.category_id]))
-            reasons.append("historial de compras")
-        score += min(10, Decimal(available))
-        scored.append((product, score, ", ".join(reasons) or "disponibilidad"))
+        score = Decimal("0")
+        reasons: list[str] = []
+        if preference and preference.category_id == product.category_id:
+            score += CU18_WEIGHT_CATEGORY
+            reasons.append("categoría preferida")
+        brand = (preference.preferred_brand or "").strip().casefold() if preference else ""
+        if brand and brand == (product.brand or "").strip().casefold():
+            score += CU18_WEIGHT_BRAND
+            reasons.append("marca preferida")
+        purchased = purchased_categories.get(product.category_id)
+        if purchased:
+            score += min(CU18_WEIGHT_HISTORY, Decimal(purchased))
+            reasons.append(HISTORY_REASON)
+        in_stock = [variant for variant in product.variants if _variant_available(variant) > 0]
+        if preferred_sizes and any(
+            (variant.size_id in preferred_sizes)
+            or any(stock.size_id in preferred_sizes for stock in variant.stocks if stock.available_stock > 0)
+            for variant in in_stock
+        ):
+            score += CU18_WEIGHT_SIZE
+            reasons.append("talla preferida")
+        if preferred_colors and any(
+            variant.color is not None and (variant.color.name or "").strip().casefold() in preferred_colors
+            for variant in in_stock
+        ):
+            score += CU18_WEIGHT_COLOR
+            reasons.append("color preferido")
+        if product.season_id is not None and product.season_id in active_seasons:
+            score += CU18_WEIGHT_SEASON
+            reasons.append(SEASONAL_REASON)
+        score += min(CU18_WEIGHT_AVAILABILITY, Decimal(available))
+        score = min(CU18_MAX_SCORE, score)
+        scored.append(
+            (product, score, ", ".join(reasons) or "disponibilidad", _recommendation_type(reasons), available)
+        )
     scored.sort(key=lambda item: (-item[1], item[0].id))
-    if get_ai_provider().__class__.__name__ != "DisabledAIProvider":
+    provider = get_ai_provider()
+    if provider.__class__.__name__ != "DisabledAIProvider":
         prompt = (
             "You are FashionStore's recommendation engine. Rank products for a customer. "
             "Return JSON {\"products\":[{\"id\":number,\"reason\":\"short reason\"}]}. "
-            f"Customer preferences: {preference and preference.__dict__}. "
-            f"Products: {[{'id': p.id, 'name': p.name, 'price': str(p.price), 'category_id': p.category_id} for p, _, _ in scored]}"
+            f"Customer preferences: {_preference_payload(preference)}. "
+            f"Products: {[{'id': p.id, 'name': p.name, 'price': str(p.price), 'category_id': p.category_id} for p, _, _, _, _ in scored]}"
         )
-        ranked = get_ai_provider().generate_json(prompt).get("products", [])
-        by_id = {product.id: (product, score, reason) for product, score, reason in scored}
+        ranked = provider.generate_json(prompt).get("products", [])
+        by_id = {product.id: (product, score, reason, kind, available) for product, score, reason, kind, available in scored}
         ai_scored = []
         for item in ranked:
             if isinstance(item, dict) and item.get("id") in by_id:
-                product, score, default_reason = by_id[item["id"]]
-                ai_scored.append((product, score, str(item.get("reason") or default_reason)))
+                product, score, default_reason, kind, available = by_id[item["id"]]
+                ai_scored.append((product, score, str(item.get("reason") or default_reason), kind, available))
         if ai_scored:
             scored = ai_scored + [item for item in scored if item[0].id not in {x[0].id for x in ai_scored}]
-    recommendation = Recommendation(user_id=user_id, recommendation_type="personalizada")
+    top = scored[:limit]
+    # El documento describe `tipo` como la categoría o tipo de recomendación estilística.
+    recommendation_type = top[0][3] if top else "disponibilidad"
+    # El documento define el estado del aviso como Pendiente al generarse.
+    recommendation = Recommendation(
+        user_id=user_id, recommendation_type=recommendation_type, status="pendiente"
+    )
     recommendation.items = [
         RecommendationItem(product_id=product.id, score=score, reason=reason)
-        for product, score, reason in scored[:limit]
+        for product, score, reason, _, _ in top
     ]
     db.add(recommendation)
     db.commit()
     db.refresh(recommendation)
-    return db.scalar(
+    result = db.scalar(
         select(Recommendation)
-        .options(selectinload(Recommendation.items))
+        .options(selectinload(Recommendation.items).selectinload(RecommendationItem.product))
         .where(Recommendation.id == recommendation.id)
     )
+    # `available_stock` no es columna: es un atributo de instancia para la respuesta.
+    availability_by_product = {product.id: available for product, _, _, _, available in top}
+    for item in result.items:
+        item.available_stock = availability_by_product.get(item.product_id)
+    return result
+
+
+def list_recommendations(db: Session, user_id: int, limit: int = 20) -> list[Recommendation]:
+    """CU18: historial de bloques de recomendación con su estado y su detalle."""
+    return list(
+        db.scalars(
+            select(Recommendation)
+            .options(selectinload(Recommendation.items).selectinload(RecommendationItem.product))
+            .where(Recommendation.user_id == user_id)
+            .order_by(Recommendation.created_at.desc(), Recommendation.id.desc())
+            .limit(limit)
+        ).all()
+    )
+
+
+def update_recommendation_status(
+    db: Session, recommendation_id: int, user_id: int, status: str, privileged: bool = False
+) -> Recommendation:
+    """CU18: marca un bloque de recomendación como visto o descartado (documento)."""
+    recommendation = db.scalar(
+        select(Recommendation)
+        .options(selectinload(Recommendation.items).selectinload(RecommendationItem.product))
+        .where(Recommendation.id == recommendation_id)
+    )
+    if recommendation is None:
+        raise HTTPException(404, "Recommendation not found")
+    if not privileged and recommendation.user_id != user_id:
+        raise HTTPException(403, "Insufficient permissions")
+    recommendation.status = status
+    db.commit()
+    db.refresh(recommendation)
+    return recommendation
 
 
 def executive_analytics(db: Session, start_date, end_date) -> dict:

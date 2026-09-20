@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -59,12 +59,25 @@ class UserPreferenceResponse(UserPreferenceUpsert):
     updated_at: datetime
 
 
+class RecommendedProductBrief(BaseModel):
+    """Producto mínimo adjunto a una recomendación para que el cliente no haga N+1."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    brand: str | None
+    price: Decimal
+    category_id: int
+    season_id: int | None
+
+
 class RecommendationItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     product_id: int
     score: Decimal
     reason: str | None
+    available_stock: int | None = None
+    product: RecommendedProductBrief | None = None
 
 
 class RecommendationResponse(BaseModel):
@@ -75,6 +88,11 @@ class RecommendationResponse(BaseModel):
     created_at: datetime
     status: str
     items: list[RecommendationItemResponse] = []
+
+
+class RecommendationStateUpdate(BaseModel):
+    """CU18: estado del aviso según el documento (Visto / Pendiente / Descartado)."""
+    status: Literal["pendiente", "visto", "descartado"]
 
 
 class AnalyticsChannel(BaseModel):

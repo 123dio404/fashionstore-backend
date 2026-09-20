@@ -10,6 +10,7 @@ from app.schemas.customer_experience import (
     ChatConversationCreate, ChatConversationResponse, ChatMessageCreate, ChatMessageResponse,
     ExecutiveAnalyticsResponse,
     RecommendationResponse,
+    RecommendationStateUpdate,
     UserPreferenceResponse,
     UserPreferenceUpsert,
     VirtualFittingResultCreate,
@@ -90,6 +91,29 @@ def generate_recommendations(
     db: Session = Depends(get_db),
 ):
     return service.generate_recommendations(db, user.id, limit)
+
+
+@router.get("/recommendations", response_model=list[RecommendationResponse])
+def list_recommendations(
+    limit: int = Query(default=20, ge=1, le=100),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """CU18: historial de recomendaciones del cliente con su estado."""
+    return service.list_recommendations(db, user.id, limit)
+
+
+@router.patch("/recommendations/{recommendation_id}", response_model=RecommendationResponse)
+def update_recommendation_status(
+    recommendation_id: int,
+    data: RecommendationStateUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """CU18: marcar el bloque de recomendaciones como visto o descartado."""
+    return service.update_recommendation_status(
+        db, recommendation_id, user.id, data.status, user.role in privileged_roles
+    )
 
 
 @router.post("/chatbot/conversations", response_model=ChatConversationResponse, status_code=201)

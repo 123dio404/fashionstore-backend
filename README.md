@@ -2,6 +2,18 @@
 
 FastAPI + SQLAlchemy 2.0 backend for CU01-CU24. The API includes authentication and roles, branches and catalog management, variants with GLB/GLTF metadata, multi-branch inventory, cart and payment-provider workflows, POS receipts, fitting-room reservations, purchase history, virtual fitting sessions, personalized recommendations, chatbot conversations, collections, promotions, sales and inventory reports, executive dashboards, and analytical queries.
 
+## Related repositories
+
+| Repositorio | Contenido |
+| :-- | :-- |
+| `fashionstore-backend` | Esta API (FastAPI + PostgreSQL) |
+| `fashionstore-mobile` | App Flutter (CU13 y CU17 son mobile-only) |
+| `fashionstore-web` | Cliente Angular 20 (22 CU) |
+| `fashionstore-design` | Diseño: sistema de diseño, tokens, logo y prototipos navegables de Figma (local: `../design`) |
+
+El diseño es el **titular** de cómo se ve cada pantalla: si el prototipo muestra un dato que la API
+todavía no expone, se agrega al backlog del backend (ver `design/DESIGN.md`).
+
 ## Run
 
 ```bash
@@ -9,10 +21,20 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-The default development database is SQLite (`fashionstore.db`). Set these variables in the environment for deployment:
+The backend only supports **PostgreSQL**: `app/core/database.py` raises if `DATABASE_URL` is not a
+`postgresql://` URL. The default URL points to the database of the bundled `docker-compose.yml`
+(port 5433):
+
+```bash
+docker compose up -d      # PostgreSQL 16 + pgAdmin
+alembic upgrade head      # crear/actualizar el esquema
+uvicorn main:app --reload
+```
+
+Set these variables in the environment for deployment:
 
 ```dotenv
-DATABASE_URL=sqlite:///./fashionstore.db
+DATABASE_URL=postgresql+psycopg2://fashionstore:fashionstore@localhost:5433/fashionstore
 SECRET_KEY=replace-me
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 AI_PROVIDER_MODE=disabled
@@ -66,6 +88,9 @@ Interactive API documentation is available at `/docs`.
 - `/api/v1/inventory`: CU09 and CU22.
 - `/api/v1/commerce`: CU10-CU16.
 - `/api/v1/fitting`, `/api/v1/recommendations`, `/api/v1/chatbot`: CU17-CU19.
+  CU18 exposes `GET/PUT /recommendations/preferences`, `POST /recommendations` (alias
+  `/recommendations/generate`), `GET /recommendations` (history with `estado`) and
+  `PATCH /recommendations/{id}` to mark it `pendiente`, `visto` or `descartado`.
 - `/api/v1/collections`, `/api/v1/promotions`: CU20.
 - `/api/v1/reports`: CU16 and CU21-CU24.
 

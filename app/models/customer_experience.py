@@ -91,7 +91,8 @@ class Recommendation(Base):
     created_at: Mapped[datetime] = mapped_column(
         "fecha_creacion", DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    status: Mapped[str] = mapped_column("estado", String(20), default="activa", nullable=False)
+    # Documento: estado del aviso -> pendiente | visto | descartado.
+    status: Mapped[str] = mapped_column("estado", String(30), default="pendiente", nullable=False)
 
     items: Mapped[list["RecommendationItem"]] = relationship(
         back_populates="recommendation", cascade="all, delete-orphan"
@@ -109,8 +110,9 @@ class RecommendationItem(Base):
     product_id: Mapped[int] = mapped_column(
         "id_producto", ForeignKey("producto.id", ondelete="CASCADE"), index=True
     )
-    score: Mapped[Decimal] = mapped_column("puntuacion", Numeric(6, 2), nullable=False)
-    reason: Mapped[str | None] = mapped_column("motivo", Text, nullable=True)
+    # Diccionario de datos del documento: puntuacion numeric(5,2), motivo varchar(255).
+    score: Mapped[Decimal] = mapped_column("puntuacion", Numeric(5, 2), nullable=False)
+    reason: Mapped[str | None] = mapped_column("motivo", String(255), nullable=True)
 
     recommendation: Mapped["Recommendation"] = relationship(back_populates="items")
     product: Mapped["Product"] = relationship()
