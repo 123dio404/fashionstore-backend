@@ -9,7 +9,10 @@ Actores (roles) del dominio Fashionstore:
 
 Todas las cuentas usan la contraseña de prueba `admin123`.
 
-Uso en local (con el entorno virtual activo y DATABASE_URL apuntando a la base):
+Este script es un wrapper de `app.services.seed_service.ensure_demo_users`, que
+también se ejecuta automáticamente al arrancar la API (si SEED_DEMO_USERS=true).
+
+Uso en local (con el entorno virtual activo):
     python -m scripts.create_seed_users
 
 Uso en Render (con el servicio api levantado):
@@ -18,60 +21,13 @@ Uso en Render (con el servicio api levantado):
 
 from __future__ import annotations
 
-from sqlalchemy import select
-
-from app.core.database import SessionLocal
-from app.core.security import get_password_hash
-from app.models.user import Role, User
-from app.services.auth_service import get_role, normalize_email
-
-PASSWORD = "admin123"
-
-# (rol, email genérico, nombre completo)
-ACTORS: list[tuple[Role, str, str]] = [
-    (Role.ADMINISTRADOR, "admin@fashionstore.com", "Administrador"),
-    (Role.ENCARGADO, "encargado@fashionstore.com", "Encargado de tienda"),
-    (Role.CAJERO, "cajero@fashionstore.com", "Cajero"),
-    (Role.CLIENTE, "cliente@fashionstore.com", "Cliente de prueba"),
-    (Role.PROVEEDOR, "proveedor@fashionstore.com", "Proveedor"),
-]
-
-
-def upsert_actor(role: Role, email: str, full_name: str) -> str:
-    """Crea el usuario con el rol indicado o restablece sus credenciales si ya existe."""
-    db = SessionLocal()
-    try:
-        normalized = normalize_email(email)
-        rol = get_role(db, role)
-        user = db.scalar(select(User).where(User.email == normalized))
-
-        if user is None:
-            user = User(
-                email=normalized,
-                full_name=full_name,
-                password_hash=get_password_hash(PASSWORD),
-                is_active=True,
-            )
-            user.roles = [rol]
-            db.add(user)
-            action = "creado"
-        else:
-            user.full_name = full_name
-            user.password_hash = get_password_hash(PASSWORD)
-            user.is_active = True
-            user.roles = [rol]
-            action = "actualizado"
-
-        db.commit()
-        return f"{role.value:<13} {action}: {normalized}"
-    finally:
-        db.close()
+from app.services.seed_service import DEMO_PASSWORD, ensure_demo_users
 
 
 def main() -> int:
-    print(f"Contraseña de prueba: {PASSWORD}\n")
-    for role, email, name in ACTORS:
-        print(upsert_actor(role, email, name))
+    print(f"Contraseña de prueba: {DEMO_PASSWORD}\n")
+    for line in ensure_demo_users():
+        print(line)
     return 0
 
 

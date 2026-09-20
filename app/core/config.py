@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     fiscal_issuer_name: str = Field(default="FashionStore S.A.S.", validation_alias="FISCAL_ISSUER_NAME")
     fiscal_issuer_tax_id: str | None = Field(default=None, validation_alias="FISCAL_ISSUER_TAX_ID")
     notification_provider: str = Field(default="not_configured", validation_alias="NOTIFICATION_PROVIDER")
+    # Siembra de cuentas demo al arranque (contraseña admin123). Desactivar en producción real.
+    seed_demo_users: bool = Field(default=True, validation_alias="SEED_DEMO_USERS")
 
     model_config = SettingsConfigDict(
         env_file=".env",
