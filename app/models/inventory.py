@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -22,6 +22,8 @@ class Stock(Base):
     __tablename__ = "inventario"
     __table_args__ = (
         UniqueConstraint("id_sucursal", "id_variante", name="uq_inventario_sucursal_variante"),
+        # Índice compuesto para el reporte de stock crítico (CU21).
+        Index("ix_inventario_stock_minimo", "stock_actual", "stock_minimo"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -45,6 +47,10 @@ class Stock(Base):
 
 class InventoryMovement(Base):
     __tablename__ = "movimiento_inventario"
+    __table_args__ = (
+        # Índice para el reporte de movimientos por fecha (CU21).
+        Index("ix_movimiento_inventario_fecha", "fecha"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     inventory_id: Mapped[int] = mapped_column("id_inventario", ForeignKey("inventario.id", ondelete="RESTRICT"), index=True)
