@@ -59,17 +59,77 @@ Coloca Nginx o Caddy delante del puerto 8000 (ejemplo con Caddy: `api.tudominio.
 y recuerda agregar ese dominio a `CORS_ORIGINS`. El contenedor ya arranca uvicorn con
 `--proxy-headers`, así que respeta `X-Forwarded-*`.
 
-## Opción B — PaaS (Render / Railway / Fly.io)
+## Opción B — Railway (API + PostgreSQL gestionado) ⭐
+
+Railway construye la imagen con el `Dockerfile` del repo y te da HTTPS y dominio público sin
+configurar nada. Pasos:
+
+1. **New Project → Deploy from GitHub repo** → `fashionstore-backend`. Railway detecta el
+   `Dockerfile` y lo usa como builder (si no, en *Settings → Build → Builder* elige **Dockerfile**).
+2. **+ New → Database → PostgreSQL** (queda como servicio aparte dentro del mismo proyecto).
+3. En el servicio de la **API** → *Variables* → agrega:
+
+   | Variable | Valor |
+   | :-- | :-- |
+   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (referencia al servicio de la base) |
+   | `SECRET_KEY` | un valor propio: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+   | `ENVIRONMENT` | `production` |
+   | `CORS_ORIGINS` | `["https://tu-web.vercel.app"]` ← **JSON**, entre corchetes y comillas |
+   | `PAYMENT_PROVIDER` | `stripe` (o `not_configured` para la demo sin cobro) |
+   | `AI_PROVIDER_MODE` | `disabled` (o `gemini` + `GEMINI_API_KEY`) |
+   | `SPEECH_PROVIDER_MODE` | `disabled` (o `google` + `GOOGLE_SPEECH_API_KEY`) |
+
+   No hace falta definir `PORT`: Railway lo inyecta y el `docker-entrypoint.sh` lo respeta.
+   Tampoco `RUN_MIGRATIONS`: por defecto es `1`, así que **las migraciones se aplican solas** en cada
+   despliegue, antes de arrancar uvicorn.
+4. **Settings → Networking → Generate Domain** → obtienes algo como
+   `https://fashionstore-backend-production.up.railway.app`. Esa es la URL base de la API:
+   `.../api/v1`.
+5. **Settings → Deploy → Healthcheck Path**: `/health`.
+6. Verifica: `curl https://<tu-dominio>/health` → `{"status":"ok"}` y `https://<tu-dominio>/docs`.
+
+### Primer administrador en Railway
+
+El script necesita llegar a la base, y la URL privada de Railway solo funciona dentro de la red del
+proyecto. Dos formas:
+
+**a) Desde tu máquina con la URL pública** (recomendado):
+
+```bash
+# Copia DATABASE_PUBLIC_URL desde el servicio Postgres → Variables
+cd fashionstore-backend
+source .venv/bin/activate
+DATABASE_URL="postgresql+psycopg2://postgres:<clave>@<host>.railway.app:<puerto>/railway" \
+  python -m scripts.create_admin --email admin@tudominio.com --password 'ClaveSegura123' --name 'Administrador'
+```
+
+**b) Por SQL** (Postgres → *Data* → *Query*), generando el hash de la contraseña con
+`python -c "from app.core.security import get_password_hash; print(get_password_hash('ClaveSegura123'))"`:
+
+```sql
+INSERT INTO rol (nombre) VALUES ('Administrador') ON CONFLICT (nombre) DO NOTHING;
+INSERT INTO usuario (nombre, email, password, estado)
+VALUES ('Administrador', 'admin@tudominio.com', '<hash-bcrypt>', TRUE);
+INSERT INTO usuario_rol (id_usuario, id_rol)
+SELECT u.id, r.id FROM usuario u, rol r
+WHERE u.email = 'admin@tudominio.com' AND r.nombre = 'Administrador';
+```
+
+### Actualizar en Railway
+
+Cada `git push` a la rama conectada redespliega. Ojo: la base **no se resetea** (Railway mantiene el
+volumen), y el `git pull` no hace falta porque Railway construye desde GitHub.
+
+## Opción C — Otros PaaS (Render / Fly.io)
+
+Mismos ajustes que Railway:
 
 | Ajuste | Valor |
 | :-- | :-- |
-| Build | `pip install -r requirements.txt` |
+| Builder | Dockerfile (o `pip install -r requirements.txt`) |
 | Start | `alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT` |
 | Health check | `/health` |
-| Variables | las de `.env.example` (con `DATABASE_URL` del Postgres gestionado y `ENVIRONMENT=production`) |
-
-Con el `Dockerfile` incluido también puedes desplegar directo en Fly.io o en un servicio que
-construya imágenes.
+| Variables | las de `.env.example`, con `DATABASE_URL` del Postgres gestionado y `ENVIRONMENT=production` |
 
 ## Variables que importan en producción
 
@@ -88,6 +148,25 @@ construya imágenes.
 git pull
 docker compose -f docker-compose.deploy.yml up -d --build   # reaplica migraciones al arrancar
 ```
+
+## La app móvil (Flutter) no va en Railway ni en Vercel
+
+Railway/Vercel alojan servicios web; la app Flutter se **compila y distribuye**:
+
+```bash
+cd fashionstore-mobile
+flutter build apk --release --dart-define=API_BASE_URL=https://<tu-api>/api/v1
+# o para Play Store:
+flutter build appbundle --release --dart-define=API_BASE_URL=https://<tu-api>/api/v1
+```
+
+- El APK/AAB queda en `build/app/outputs/` y se instala o se sube a Play Console / Firebase App
+  Distribution.
+- La URL de la API se inyecta en tiempo de compilación con `--dart-define`; si cambias de backend hay
+  que **recompilar** (no se puede cambiar en caliente).
+- Recuerda que el móvil usa `http://10.0.2.2:8000/api/v1` para el emulador de Android y que el
+  backend debe permitir el origen correspondiente (el móvil nativo no está sujeto a CORS, así que no
+  necesita entrar en `CORS_ORIGINS`).
 
 ## Copias de seguridad
 
