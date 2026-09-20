@@ -34,6 +34,45 @@ class MockPaymentProvider(PaymentProvider):
         raise HTTPException(400, "Mock provider does not accept webhooks")
 
 
+# RF18 / CU12: medios de pago de caja. Ninguno pasa por una pasarela de pago, por eso se aceptan
+# también en producción (a diferencia de `mock`, que es un simulador sólo de desarrollo).
+IN_STORE_PAYMENT_METHODS: dict[str, str] = {
+    "efectivo": "efectivo",
+    "cash": "efectivo",
+    "tarjeta": "tarjeta",
+    "card": "tarjeta",
+    "tarjeta_credito": "tarjeta",
+    "tarjeta_debito": "tarjeta",
+    "datafono": "datafono",
+    "datáfono": "datafono",
+}
+
+
+class InStorePaymentProvider(PaymentProvider):
+    """Cobro en caja (efectivo, tarjeta, datáfono): confirma el comercio, no una pasarela.
+
+    La referencia del pago es el comprobante interno `POS-<id de venta>`, el mismo formato que el
+    punto de venta usa para los recibos, y no hay confirmación asíncrona ni webhooks.
+    """
+
+    def __init__(self, method: str = "efectivo") -> None:
+        self.method = method
+
+    def create_intent(self, amount, currency, idempotency_key, metadata):
+        sale_id = metadata.get("sale_id")
+        reference = f"POS-{int(sale_id):012d}" if sale_id is not None else f"POS-{idempotency_key}"
+        return {
+            "id": reference,
+            "status": "succeeded",
+            "amount": int(Decimal(amount) * 100),
+            "currency": currency,
+            "payment_method": self.method,
+        }
+
+    def verify_webhook(self, payload, signature):
+        raise HTTPException(400, "In-store payments do not accept webhooks")
+
+
 class StripePaymentProvider(PaymentProvider):
     def create_intent(self, amount, currency, idempotency_key, metadata):
         if not settings.stripe_secret_key:
@@ -67,6 +106,8 @@ class StripePaymentProvider(PaymentProvider):
 
 def get_payment_provider(name: str | None = None) -> PaymentProvider:
     mode = (name or settings.payment_provider).casefold()
+    if mode in IN_STORE_PAYMENT_METHODS:
+        return InStorePaymentProvider(IN_STORE_PAYMENT_METHODS[mode])
     if mode == "stripe":
         return StripePaymentProvider()
     if mode == "mock" and settings.environment.casefold() in {"development", "test"}:

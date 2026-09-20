@@ -10,6 +10,7 @@ from app.schemas.commerce import (
     CartItemUpdate,
     CartResponse,
     CheckoutRequest,
+    InvoiceResponse,
     PosSaleCreate,
     ReservationCreate,
     ReservationResponse,
@@ -36,7 +37,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     return {"received": True}
 
 
-@router.post('/sales/{sale_id}/invoice')
+@router.post('/sales/{sale_id}/invoice', response_model=InvoiceResponse)
 def issue_invoice(sale_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     sale = commerce_service.get_sale(db, sale_id)
     if user.role not in PRIVILEGED and sale.client_id != user.id:
