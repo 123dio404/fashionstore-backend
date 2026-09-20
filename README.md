@@ -26,7 +26,7 @@ The backend only supports **PostgreSQL**: `app/core/database.py` raises if `DATA
 (port 5433):
 
 ```bash
-docker compose up -d      # PostgreSQL 16 + pgAdmin
+docker compose up -d      # PostgreSQL 16 en el puerto 5433 (el usuario no está en el grupo docker: usa `sudo docker compose up -d`)
 alembic upgrade head      # crear/actualizar el esquema
 uvicorn main:app --reload
 ```
