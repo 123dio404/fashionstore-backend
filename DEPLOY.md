@@ -131,6 +131,39 @@ Mismos ajustes que Railway:
 | Health check | `/health` |
 | Variables | las de `.env.example`, con `DATABASE_URL` del Postgres gestionado y `ENVIRONMENT=production` |
 
+### Render con Blueprint (recomendado)
+
+El repo incluye `render.yaml`: crea **en un mismo proyecto** el Web Service de la API
+(`Dockerfile`) y su **PostgreSQL gestionado**, conectados automáticamente.
+
+1. **Render → New → Blueprint** → conecta el repo `123dio404/fashionstore-backend`.
+   Render detecta `render.yaml`, crea la base y el servicio, y despliega.
+2. La variable `DATABASE_URL` se inyecta sola desde el Postgres (Render la entrega como
+   `postgres://...`; el backend la normaliza a `postgresql+psycopg2://`). `SECRET_KEY` se
+   genera aleatoriamente y `CORS_ORIGINS` ya incluye `https://fashionstore-web-eight.vercel.app`.
+3. El `Dockerfile` aplica migraciones al arrancar (`docker-entrypoint.sh`), así que con el primer
+   deploy el esquema queda listo. Verifica: `curl https://<tu-servicio>.onrender.com/health`.
+4. **Primer administrador** (sin él no hay gestión): genera el hash y crea el usuario desde
+   **Postgres → Data → Query** (la base de Render no expone `exec`):
+
+   ```bash
+   # en tu máquina
+   source .venv/bin/activate
+   python -c "from app.core.security import get_password_hash; print(get_password_hash('ClaveSegura123'))"
+   ```
+
+   ```sql
+   INSERT INTO rol (nombre) VALUES ('Administrador') ON CONFLICT (nombre) DO NOTHING;
+   INSERT INTO usuario (nombre, email, password, estado)
+   VALUES ('Administrador', 'admin@tudominio.com', '<hash-bcrypt>', TRUE);
+   INSERT INTO usuario_rol (id_usuario, id_rol)
+   SELECT u.id, r.id FROM usuario u, rol r
+   WHERE u.email = 'admin@tudominio.com' AND r.nombre = 'Administrador';
+   ```
+
+5. Cada `git push` a la rama conectada redespliega; la base **no se resetea**.
+   Para cambiar Stripe/IA edita la variable en el dashboard del servicio.
+
 ## Variables que importan en producción
 
 | Variable | Por qué |
