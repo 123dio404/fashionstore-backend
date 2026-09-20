@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
-# Arranque del contenedor de la API: aplica migraciones y levanta uvicorn.
+# Arranque del contenedor de la API: inicializa el esquema y levanta uvicorn.
 set -e
 
 if [ "${RUN_MIGRATIONS:-1}" = "1" ]; then
-  echo "==> Aplicando migraciones (alembic upgrade head)"
-  alembic upgrade head
+  echo "==> Inicializando esquema (scripts/init_schema.py)"
+  python -m scripts.init_schema
 fi
 
 echo "==> Arrancando API en el puerto ${PORT:-8000}"

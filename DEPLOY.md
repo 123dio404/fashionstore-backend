@@ -25,7 +25,9 @@ Qué hace el compose de despliegue:
 
 1. Levanta **Postgres 16** con volumen persistente (`pgdata`).
 2. Construye la imagen de la API (`Dockerfile`) y espera a que la base esté sana.
-3. El contenedor de la API ejecuta `alembic upgrade head` y luego `uvicorn` en el puerto 8000.
+3. El contenedor de la API crea el esquema desde los modelos
+   (`scripts/init_schema.py`: `Base.metadata.create_all` + `alembic stamp head`)
+   y luego levanta `uvicorn` en el puerto 8000.
 
 Verificación:
 
@@ -35,7 +37,9 @@ curl http://localhost:8000/docs            # documentación interactiva
 ```
 
 > **No se monta `db/init.sql`**: ese archivo es la referencia del diccionario de datos del
-> documento. El esquema real lo crea Alembic; montarlo provocaría tablas duplicadas.
+> documento. El esquema real se crea desde los **modelos** del backend (`create_all`);
+> montarlo o correr la cadena histórica de Alembic provocaría tablas duplicadas o fallos
+> (esa cadena mezcla tablas en inglés y en español).
 
 ### Primer administrador (obligatorio: sin él no hay gestión)
 
@@ -80,8 +84,8 @@ configurar nada. Pasos:
    | `SPEECH_PROVIDER_MODE` | `disabled` (o `google` + `GOOGLE_SPEECH_API_KEY`) |
 
    No hace falta definir `PORT`: Railway lo inyecta y el `docker-entrypoint.sh` lo respeta.
-   Tampoco `RUN_MIGRATIONS`: por defecto es `1`, así que **las migraciones se aplican solas** en cada
-   despliegue, antes de arrancar uvicorn.
+   Tampoco `RUN_MIGRATIONS`: por defecto es `1`, así que **el esquema se inicializa solo**
+   en cada despliegue, antes de arrancar uvicorn.
 4. **Settings → Networking → Generate Domain** → obtienes algo como
    `https://fashionstore-backend-production.up.railway.app`. Esa es la URL base de la API:
    `.../api/v1`.
@@ -127,7 +131,7 @@ Mismos ajustes que Railway:
 | Ajuste | Valor |
 | :-- | :-- |
 | Builder | Dockerfile (o `pip install -r requirements.txt`) |
-| Start | `alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT` |
+| Start | `python -m scripts.init_schema && uvicorn main:app --host 0.0.0.0 --port $PORT` |
 | Health check | `/health` |
 | Variables | las de `.env.example`, con `DATABASE_URL` del Postgres gestionado y `ENVIRONMENT=production` |
 
@@ -171,7 +175,7 @@ El repo incluye `render.yaml`: crea **en un mismo proyecto** el Web Service de l
 | `DATABASE_URL` | El backend **rechaza** cualquier URL que no sea `postgresql://` |
 | `SECRET_KEY` | Firma los JWT; sin cambiarla los tokens son falsificables |
 | `CORS_ORIGINS` | Debe incluir el dominio del front o el navegador bloqueará las llamadas |
-| `ENVIRONMENT=production` | Evita `create_all` y deja el esquema solo en manos de Alembic |
+| `ENVIRONMENT=production` | Evita que la app cree el esquema con `create_all` en cada arranque (en despliegue lo hace el entrypoint/Start command) |
 | `PAYMENT_PROVIDER` / `STRIPE_SECRET_KEY` | Sin claves, el checkout (CU11) falla con error explícito |
 | `AI_PROVIDER_MODE` / `SPEECH_PROVIDER_MODE` | `disabled` = respuestas deterministas; `gemini`/`google` requieren claves |
 
