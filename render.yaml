@@ -1,0 +1,53 @@
+# Render Blueprint: despliega la API (Web Service) y su PostgreSQL gestionado juntos.
+# Uso: Render → New → Blueprint → conectar este repo, o con la CLI:
+#   curl -X POST https://api.render.com/v1/blueprints \
+#     -H 'Authorization: Bearer <TOKEN>' \
+#     -H 'Content-Type: application/json' \
+#     -d '{ "blueprint": <contenido render.yaml> }'
+#
+# La base y la API quedan en el MISMO proyecto de Render (aunque como servicios
+# separados: Render no ejecuta docker-compose).
+#
+# Después del primer deploy: crea el admin
+#   docker run --rm -e DATABASE_URL="postgresql+psycopg2://<usuario>:<clave>@<host>/<db>" <imagen> python -m scripts.create_admin ...
+# o por SQL en el dashboard del Postgres (ver DEPLOY.md).
+
+databases:
+  - name: fashionstore-db
+    databaseName: fashionstore
+    user: fashionstore
+    plan: free
+    region: oregon
+
+services:
+  - type: web
+    name: fashionstore-api
+    runtime: docker
+    repo: https://github.com/123dio404/fashionstore-backend
+    plan: free
+    region: oregon
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fashionstore-db
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: '["https://fashionstore-web-eight.vercel.app"]'
+      # Cuándo tengas claves reales de Stripe, cambia PAYMENT_PROVIDER a `stripe`
+      # y agrega STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET.
+      - key: PAYMENT_PROVIDER
+        value: not_configured
+      - key: FISCAL_PROVIDER
+        value: not_configured
+      - key: NOTIFICATION_PROVIDER
+        value: not_configured
+      - key: AI_PROVIDER_MODE
+        value: disabled
+      - key: SPEECH_PROVIDER_MODE
+        value: disabled

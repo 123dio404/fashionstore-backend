@@ -1,0 +1,42 @@
+.git
+.gitignore
+.gitattributes
+
+# Entornos y secretos
+.env
+.env.*
+!.env.example
+
+# Virtualenvs
+.venv
+venv
+env
+
+# Python cache
+__pycache__
+*.py[cod]
+*.egg-info
+
+# Bases locales
+*.db
+*.sqlite*
+db/
+
+# Docs
+README.md
+DEPLOY.md
+
+# Herramientas / CI
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.tox
+.nox
+.circleci
+.github
+.gitlab-ci.yml
+
+# Editores / SO
+.idea
+.vscode
+.DS_Store

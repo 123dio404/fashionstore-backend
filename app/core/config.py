@@ -1,7 +1,7 @@
 from functools import lru_cache
 from decimal import Decimal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +14,21 @@ class Settings(BaseSettings):
         default="postgresql+psycopg2://fashionstore:fashionstore@localhost:5433/fashionstore",
         validation_alias="DATABASE_URL",
     )
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: object) -> object:
+        """Render/Railway entregan URLs como `postgres://...` sin driver.
+
+        SQLAlchemy 2 exige el driver explícito, así que se normaliza a
+        `postgresql+psycopg2://...` cuando falte.
+        """
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql+psycopg2://", 1)
+            if v.startswith("postgresql://"):
+                return v.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return v
     secret_key: str = Field(
         default="change-me-in-production",
         validation_alias="SECRET_KEY",
@@ -28,7 +43,8 @@ class Settings(BaseSettings):
         default_factory=lambda: [
             "http://localhost:4200",
             "http://127.0.0.1:4200",
-        ]
+        ],
+        validation_alias="CORS_ORIGINS",
     )
     ai_provider_mode: str = Field(default="disabled", validation_alias="AI_PROVIDER_MODE")
     gemini_api_key: str | None = Field(default=None, validation_alias="GEMINI_API_KEY")
