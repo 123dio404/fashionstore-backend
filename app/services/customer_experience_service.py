@@ -22,6 +22,7 @@ from app.schemas.customer_experience import (
     VirtualFittingResultCreate,
     VirtualFittingSessionCreate,
 )
+from app.services.chat_context_service import build_chat_context, deterministic_reply, render_prompt
 
 
 def create_fitting_session(db: Session, user_id: int, data: VirtualFittingSessionCreate) -> VirtualFittingSession:
@@ -404,27 +405,22 @@ def get_chat_conversation(db: Session, conversation_id: int, user_id: int, privi
     return conversation
 
 
-def send_chat_message(db: Session, conversation: ChatConversation, content: str, context=None):
+def send_chat_message(db: Session, conversation: ChatConversation, content: str, context=None, user=None):
+    """CU19: el asistente responde con los datos reales del cliente (RF25).
+
+    El contexto se arma antes de guardar el mensaje para que el historial que viaja al modelo sea
+    la conversación previa, sin el mensaje que se está respondiendo.
+    """
+    chat_context = build_chat_context(db, conversation, user, context)
     db.add(ChatMessage(conversation_id=conversation.id, role="user", content=content, context=context))
     provider = get_ai_provider()
     if provider.__class__.__name__ != "DisabledAIProvider":
-        answer = provider.generate_text(
-            "You are FashionStore customer support. Answer in Spanish, briefly and safely, "
-            f"using this context when relevant: {context or conversation.context or {}}. User: {content}"
-        )
+        answer = provider.generate_text(render_prompt(content, chat_context))
     else:
-        lowered = content.lower()
-        if any(word in lowered for word in ("pedido", "orden", "compra")):
-            answer = "Puedo ayudarte a revisar tus pedidos. Consulta el estado desde tu historial de compras."
-        elif any(word in lowered for word in ("talla", "tamaño", "size")):
-            answer = "Para elegir talla, revisa la guía de tallas del producto o usa la recomendación personalizada."
-        elif any(word in lowered for word in ("promo", "descuento", "oferta")):
-            answer = "Consulta las promociones activas para conocer descuentos disponibles."
-        elif any(word in lowered for word in ("hola", "buenas")):
-            answer = "¡Hola! Puedo ayudarte con productos, tallas, pedidos y promociones."
-        else:
-            answer = "Puedo ayudarte con productos, recomendaciones, tallas, pedidos y promociones. ¿Qué necesitas?"
-    assistant_message = ChatMessage(conversation_id=conversation.id, role="assistant", content=answer, context=context)
+        answer = deterministic_reply(content, chat_context)
+    assistant_message = ChatMessage(
+        conversation_id=conversation.id, role="assistant", content=answer, context=context
+    )
     db.add(assistant_message)
     db.commit()
     db.refresh(assistant_message)

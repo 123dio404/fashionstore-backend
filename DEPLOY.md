@@ -79,7 +79,8 @@ configurar nada. Pasos:
    | `SECRET_KEY` | un valor propio: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
    | `ENVIRONMENT` | `production` |
    | `CORS_ORIGINS` | `["https://tu-web.vercel.app"]` ← **JSON**, entre corchetes y comillas |
-   | `PAYMENT_PROVIDER` | `stripe` (o `not_configured` para la demo sin cobro) |
+   | `PAYMENT_PROVIDER` | `stripe` con claves de prueba (o `not_configured` sin cobro). La caja no usa esta variable: cobra con `efectivo`/`tarjeta`/`datafono` |
+   | `FISCAL_PROVIDER` | `simulated` (factura con IVA, sin validez fiscal) o `not_configured` |
    | `AI_PROVIDER_MODE` | `disabled` (o `gemini` + `GEMINI_API_KEY`) |
    | `SPEECH_PROVIDER_MODE` | `disabled` (o `google` + `GOOGLE_SPEECH_API_KEY`) |
 
@@ -176,7 +177,8 @@ El repo incluye `render.yaml`: crea **en un mismo proyecto** el Web Service de l
 | `SECRET_KEY` | Firma los JWT; sin cambiarla los tokens son falsificables |
 | `CORS_ORIGINS` | Debe incluir el dominio del front o el navegador bloqueará las llamadas |
 | `ENVIRONMENT=production` | Evita que la app cree el esquema con `create_all` en cada arranque (en despliegue lo hace el entrypoint/Start command) |
-| `PAYMENT_PROVIDER` / `STRIPE_SECRET_KEY` | Sin claves, el checkout (CU11) falla con error explícito |
+| `PAYMENT_PROVIDER` / `STRIPE_SECRET_KEY` | Sin claves, el checkout (CU11) falla con error explícito; la caja (CU12) no las necesita |
+| `FISCAL_PROVIDER` | `simulated` emite la factura con IVA y número propios; `not_configured` responde 503 |
 | `AI_PROVIDER_MODE` / `SPEECH_PROVIDER_MODE` | `disabled` = respuestas deterministas; `gemini`/`google` requieren claves |
 
 ## Actualizar una versión desplegada

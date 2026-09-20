@@ -1,4 +1,5 @@
 from functools import lru_cache
+from decimal import Decimal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -56,6 +57,10 @@ class Settings(BaseSettings):
     stripe_api_base: str = Field(default="https://api.stripe.com/v1", validation_alias="STRIPE_API_BASE")
     payment_provider: str = Field(default="stripe", validation_alias="PAYMENT_PROVIDER")
     fiscal_provider: str = Field(default="not_configured", validation_alias="FISCAL_PROVIDER")
+    # Documento fiscal simulado: el precio de la venta se interpreta con IVA incluido.
+    fiscal_tax_rate: Decimal = Field(default=Decimal("0.19"), validation_alias="FISCAL_TAX_RATE", ge=0, lt=1)
+    fiscal_issuer_name: str = Field(default="FashionStore S.A.S.", validation_alias="FISCAL_ISSUER_NAME")
+    fiscal_issuer_tax_id: str | None = Field(default=None, validation_alias="FISCAL_ISSUER_TAX_ID")
     notification_provider: str = Field(default="not_configured", validation_alias="NOTIFICATION_PROVIDER")
 
     model_config = SettingsConfigDict(

@@ -134,7 +134,7 @@ def get_chat_conversation(conversation_id: int, user: User = Depends(get_current
 @router.post("/chatbot/conversations/{conversation_id}/messages", response_model=ChatMessageResponse, status_code=201)
 def send_chat_message(conversation_id: int, data: ChatMessageCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     conversation = service.get_chat_conversation(db, conversation_id, user.id, user.role in privileged_roles)
-    return service.send_chat_message(db, conversation, data.content, data.context)
+    return service.send_chat_message(db, conversation, data.content, data.context, user)
 
 
 @router.get("/analytics/executive", response_model=ExecutiveAnalyticsResponse, dependencies=[staff])

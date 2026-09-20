@@ -1,7 +1,7 @@
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import TYPE_CHECKING
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -38,6 +38,10 @@ class CartItem(Base):
 
 class Sale(Base):
     __tablename__ = "venta"
+    __table_args__ = (
+        # Índice compuesto para los reportes de ventas (CU16 / CU21-CU24).
+        Index("ix_venta_fecha_cliente", "fecha", "id_cliente"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     client_id: Mapped[int] = mapped_column("id_cliente", ForeignKey("usuario.id", ondelete="RESTRICT"))
