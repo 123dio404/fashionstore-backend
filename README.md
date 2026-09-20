@@ -59,6 +59,14 @@ alembic upgrade head
 
 Interactive API documentation is available at `/docs`.
 
+## Deployment
+
+Production runs **only on PostgreSQL** and ships with containers: `Dockerfile`,
+`docker-entrypoint.sh` (applies `alembic upgrade head` before starting uvicorn) and
+`docker-compose.deploy.yml` (Postgres 16 + API with healthchecks). See **[DEPLOY.md](./DEPLOY.md)** for
+the server and PaaS recipes, the required environment variables and how to create the first
+administrator (`python -m scripts.create_admin ...`).
+
 ## Actors and authorization
 
 - **CL**: `Cliente`, the end user who registers, shops, reserves, reviews purchases, uses the virtual fitting room, recommendations, and chatbot.

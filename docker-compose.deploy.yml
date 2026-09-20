@@ -1,0 +1,40 @@
+# Despliegue de la API + base de datos.
+# Uso: cp .env.example .env  → edita SECRET_KEY y CORS_ORIGINS → docker compose -f docker-compose.deploy.yml up -d --build
+#
+# Importante: aquí NO se monta db/init.sql. El esquema lo crea Alembic (fuente única de verdad);
+# init.sql queda como referencia del diccionario de datos del documento.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fashionstore-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fashionstore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fashionstore}
+      POSTGRES_DB: ${POSTGRES_DB:-fashionstore}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fashionstore} -d ${POSTGRES_DB:-fashionstore}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+    container_name: fashionstore-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-fashionstore}:${POSTGRES_PASSWORD:-fashionstore}@db:5432/${POSTGRES_DB:-fashionstore}
+      ENVIRONMENT: production
+      RUN_MIGRATIONS: "1"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
