@@ -65,6 +65,21 @@ class Settings(BaseSettings):
     # Siembra de cuentas demo al arranque (contraseña admin123). Desactivar en producción real.
     seed_demo_users: bool = Field(default=True, validation_alias="SEED_DEMO_USERS")
 
+    @field_validator("cors_origins", mode="after")
+    @classmethod
+    def _include_dev_origins(cls, v: list[str]) -> list[str]:
+        """Garantiza que el origen de desarrollo web local siempre esté permitido.
+
+        Así la web local (`ng serve` en localhost:4200) funciona contra cualquier
+        despliegue sin depender de que CORS_ORIGINS lo incluya manualmente.
+        """
+        dev = ["http://localhost:4200", "http://127.0.0.1:4200"]
+        result = list(v) if v else []
+        for origin in dev:
+            if origin not in result:
+                result.append(origin)
+        return result
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
