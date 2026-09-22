@@ -129,7 +129,7 @@ def get_sale(sale_id: int, user: User = Depends(get_current_user), db: Session =
     sale = commerce_service.get_sale(db, sale_id)
     if user.role not in PRIVILEGED and sale.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
-    return sale
+    return commerce_service.sale_response(db, sale)
 
 
 @router.get('/sales/{sale_id}/receipt', response_model=ReceiptResponse)

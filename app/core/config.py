@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # stock por sucursal) para que ventas, inventario y vestidor AR funcionen con datos
     # reales. Idempotente; desactivar en un despliegue con catálogo propio.
     seed_demo_catalog: bool = Field(default=True, validation_alias="SEED_DEMO_CATALOG")
+    # Siembra del historial de compras del prototipo (ORD-4821/4765/4690 de Figma) como
+    # ventas reales del cliente demo. Idempotente; desactivar si no se quiere ese historial.
+    seed_demo_purchases: bool = Field(default=False, validation_alias="SEED_DEMO_PURCHASES")
 
     @field_validator("cors_origins", mode="after")
     @classmethod

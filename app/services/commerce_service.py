@@ -24,9 +24,13 @@ from app.schemas.commerce import (
     CheckoutRequest,
     PosSaleCreate,
     ReservationCreate,
+    ReservationResponse,
     ReservationUpdate,
     PaymentStatus,
     ReceiptResponse,
+    SaleItemResponse,
+    SalePaymentResponse,
+    SaleResponse,
 )
 from app.providers import IN_STORE_PAYMENT_METHODS, get_payment_provider
 from app.core.config import settings
@@ -248,11 +252,50 @@ def sale_lines(db: Session, sale_id: int) -> list[dict]:
     return lines
 
 
-def list_sales(db: Session, client_id: int | None = None) -> list[Sale]:
+def list_sales(db: Session, client_id: int | None = None) -> list[SaleResponse]:
     q = select(Sale).order_by(Sale.sale_date.desc(), Sale.id)
     if client_id is not None:
         q = q.where(Sale.client_id == client_id)
-    return list(db.scalars(q).all())
+    return [sale_response(db, sale) for sale in db.scalars(q).all()]
+
+
+def sale_items(db: Session, sale: Sale) -> list[SaleItemResponse]:
+    """Detalle de cada línea con variante → producto, igual que la factura en PDF."""
+    rows: list[SaleItemResponse] = []
+    for item in sale.items:
+        stock = db.get(Stock, item.stock_id)
+        variant = stock.variant if stock is not None else None
+        product = variant.product if variant is not None else None
+        rows.append(
+            SaleItemResponse(
+                id=item.id,
+                stock_id=item.stock_id,
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                variant_id=variant.id if variant is not None else None,
+                product_id=product.id if product is not None else None,
+                product_name=product.name if product is not None else None,
+                brand=product.brand if product is not None else None,
+                size=variant.size.name if variant is not None and variant.size else None,
+                color=variant.color.name if variant is not None and variant.color else None,
+            )
+        )
+    return rows
+
+
+def sale_response(db: Session, sale: Sale) -> SaleResponse:
+    """Venta lista para el cliente: líneas legibles y pagos."""
+    return SaleResponse(
+        id=sale.id,
+        client_id=sale.client_id,
+        user_id=sale.user_id,
+        branch_id=sale.branch_id,
+        sale_date=sale.sale_date,
+        total=sale.total,
+        sale_type=sale.sale_type,
+        items=sale_items(db, sale),
+        payments=[SalePaymentResponse.model_validate(p) for p in sale.payments],
+    )
 
 
 def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:

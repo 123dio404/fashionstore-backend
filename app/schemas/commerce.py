@@ -95,6 +95,12 @@ class SaleItemResponse(ORMModel):
     stock_id: int
     quantity: int
     unit_price: Decimal
+    variant_id: int | None = None
+    product_id: int | None = None
+    product_name: str | None = None
+    brand: str | None = None
+    size: str | None = None
+    color: str | None = None
 
 
 class SalePaymentResponse(ORMModel):

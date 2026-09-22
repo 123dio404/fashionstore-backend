@@ -11,7 +11,7 @@ La siembra es idempotente: si una cuenta ya existe, restablece su contraseña a
 from __future__ import annotations
 
 import unicodedata
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -19,7 +19,8 @@ from sqlalchemy import select
 from app.core.database import SessionLocal
 from app.core.security import get_password_hash
 from app.models.branch import Branch, City
-from app.models.inventory import Stock
+from app.models.commerce import Sale, SaleItem, SalePayment
+from app.models.inventory import InventoryMovement, MovementType, Stock
 from app.models.product import Category, Color, Product, ProductVariant, Season, Size
 from app.models.user import Role, User
 from app.services.auth_service import get_role, normalize_email
@@ -270,6 +271,134 @@ def ensure_demo_catalog() -> list[str]:
         summary.append(f"productos nuevos: {created}/{len(DEMO_CATALOG)}")
         summary.append(f"variantes nuevas: {variants_created}")
         db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+    return summary
+
+
+# --------------------------------------------------------------------------- #
+# Historial de compras del prototipo (INITIAL_PURCHASES de Figma)              #
+# --------------------------------------------------------------------------- #
+# El prototipo mostraba 3 órdenes demo (`ORD-4821`, `ORD-4765`, `ORD-4690`) como
+# datos estáticos. Esta siembra las convierte en ventas reales del cliente demo
+# (con líneas, pago y movimiento de inventario) para que exista historial en la
+# base y la pantalla "Mis compras" las cargue desde la API. Idempotente.
+
+# (referencia, fecha, sucursal, estado del pago, total, líneas)
+# Cada línea: (nombre del producto, talla, color, cantidad, precio unitario).
+# El estado `reembolsado` reproduce la orden cancelada: no descuenta stock.
+DEMO_PURCHASES: list[tuple[str, datetime, str, str, str, list[tuple[str, str, str, int, str]]]] = [
+    (
+        "figma-ORD-4821",
+        datetime(2026, 9, 15, 15, 30, tzinfo=timezone.utc),
+        "Sucursal Centro",
+        "completado",
+        "157.49",
+        [
+            ("Blazer Oversize Lana", "M", "Negro", 1, "89.99"),
+            ("Blazer Estructurado", "M", "Carbón", 1, "62.51"),
+        ],
+    ),
+    (
+        "figma-ORD-4765",
+        datetime(2026, 9, 2, 12, 0, tzinfo=timezone.utc),
+        "Sucursal Norte",
+        "completado",
+        "79.99",
+        [
+            ("Sneakers Clásicas", "40", "Blanco", 1, "79.99"),
+        ],
+    ),
+    (
+        "figma-ORD-4690",
+        datetime(2026, 8, 18, 10, 15, tzinfo=timezone.utc),
+        "Sucursal Centro",
+        "reembolsado",
+        "54.00",
+        [
+            ("Conjunto Punto Acanalado", "M", "Gris", 1, "54.00"),
+        ],
+    ),
+]
+
+
+def ensure_demo_purchases() -> list[str]:
+    """Crea el historial de compras del prototipo como ventas reales del cliente demo.
+
+    Requiere que existan el cliente demo, las sucursales y las variantes con su
+    stock (los siembra `ensure_demo_users` y `ensure_demo_catalog`). Es idempotente:
+    una orden se salta si su referencia ya existe en `pago`.
+    """
+    db = SessionLocal()
+    summary: list[str] = []
+    try:
+        client = db.scalar(select(User).where(User.email == "cliente@fashionstore.com"))
+        if client is None:
+            summary.append("cliente demo no existe (corre ensure_demo_users primero)")
+            return summary
+        for reference, sale_date, branch_name, payment_status, total, lines in DEMO_PURCHASES:
+            if db.scalar(select(SalePayment).where(SalePayment.reference == reference)):
+                summary.append(f"{reference}: ya existía")
+                continue
+            branch = db.scalar(select(Branch).where(Branch.name == branch_name))
+            if branch is None:
+                summary.append(f"{reference}: sucursal no encontrada")
+                continue
+            sale = Sale(
+                client_id=client.id,
+                user_id=client.id,
+                branch_id=branch.id,
+                sale_date=sale_date,
+                total=Decimal(total),
+                sale_type="digital",
+            )
+            db.add(sale)
+            db.flush()
+            cancelled = payment_status == "reembolsado"
+            for name, size_name, color_name, qty, price in lines:
+                variant = db.scalar(
+                    select(ProductVariant)
+                    .join(Product)
+                    .where(
+                        Product.name == name,
+                        ProductVariant.size.has(Size.name == size_name),
+                        ProductVariant.color.has(Color.name == color_name),
+                    )
+                )
+                if variant is None:
+                    summary.append(f"{reference}: variante {name}-{size_name}-{color_name} no existe")
+                    continue
+                stock = db.scalar(
+                    select(Stock).where(Stock.branch_id == branch.id, Stock.variant_id == variant.id)
+                )
+                if stock is None:
+                    summary.append(f"{reference}: stock de {name} en {branch_name} no existe")
+                    continue
+                sale.items.append(SaleItem(stock_id=stock.id, quantity=qty, unit_price=Decimal(price)))
+                if not cancelled:
+                    stock.physical_stock -= qty
+                    db.add(
+                        InventoryMovement(
+                            movement_type=MovementType.VENTA,
+                            inventory_id=stock.id,
+                            quantity=-qty,
+                            reason=f"Siembra venta demo {reference}",
+                        )
+                    )
+            if sale.items:
+                sale.payments.append(
+                    SalePayment(
+                        amount=sale.total,
+                        status=payment_status,
+                        paid_at=sale_date,
+                        reference=reference,
+                    )
+                )
+                summary.append(f"{reference}: creada ({len(sale.items)} líneas)")
+            db.commit()
     except Exception:
         db.rollback()
         raise
