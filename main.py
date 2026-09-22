@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.services.seed_service import ensure_demo_catalog, ensure_demo_users
+from app.services.seed_service import ensure_demo_catalog, ensure_demo_purchases, ensure_demo_users
 import app.models  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,12 @@ async def lifespan(app: FastAPI):
                 logger.info("Catálogo demo: %s", line)
         except Exception:
             logger.exception("No se pudo sembrar el catálogo demo")
+    if settings.seed_demo_purchases:
+        try:
+            for line in ensure_demo_purchases():
+                logger.info("Compras demo: %s", line)
+        except Exception:
+            logger.exception("No se pudo sembrar el historial de compras demo")
     yield
 
 app = FastAPI(title=settings.app_name, version='1.0.0', lifespan=lifespan)
