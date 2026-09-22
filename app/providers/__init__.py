@@ -4,6 +4,7 @@ from .payments import (
     IN_STORE_PAYMENT_METHODS,
     InStorePaymentProvider,
     PaymentProvider,
+    SimulatedPaymentProvider,
     get_payment_provider,
 )
 from .business import FiscalProvider, NotificationProvider, get_fiscal_provider, get_notification_provider

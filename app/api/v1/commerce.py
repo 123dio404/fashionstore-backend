@@ -1,6 +1,6 @@
 from datetime import date as DateType
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_role
@@ -20,6 +20,7 @@ from app.schemas.commerce import (
     ReceiptResponse,
 )
 from app.services import commerce_service
+from app.services.invoice_pdf import build_invoice_pdf
 from app.providers import get_payment_provider, get_fiscal_provider, get_notification_provider
 
 router = APIRouter(prefix='/commerce', tags=['commerce'])
@@ -43,6 +44,28 @@ def issue_invoice(sale_id: int, user: User = Depends(get_current_user), db: Sess
     if user.role not in PRIVILEGED and sale.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     return get_fiscal_provider().issue_invoice(sale=sale)
+
+
+@router.get('/sales/{sale_id}/invoice.pdf')
+def download_invoice_pdf(
+    sale_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Factura en PDF (documento fiscal simulado del CU11).
+
+    Usa el mismo documento que `POST /sales/{id}/invoice`, así que el número, el IVA y
+    el descargo del PDF coinciden con la respuesta JSON.
+    """
+    sale = commerce_service.get_sale(db, sale_id)
+    if user.role not in PRIVILEGED and sale.client_id != user.id:
+        raise HTTPException(status_code=403, detail='Insufficient permissions')
+    invoice = get_fiscal_provider().issue_invoice(sale=sale)
+    pdf = build_invoice_pdf(invoice, commerce_service.sale_lines(db, sale_id))
+    filename = f"{invoice.get('invoice_number', f'FAC-{sale_id:012d}')}.pdf"
+    return Response(
+        content=pdf,
+        media_type='application/pdf',
+        headers={'Content-Disposition': f'inline; filename="{filename}"'},
+    )
 
 
 @router.post('/sales/{sale_id}/notifications')

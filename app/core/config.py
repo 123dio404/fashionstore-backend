@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     notification_provider: str = Field(default="not_configured", validation_alias="NOTIFICATION_PROVIDER")
     # Siembra de cuentas demo al arranque (contraseña admin123). Desactivar en producción real.
     seed_demo_users: bool = Field(default=True, validation_alias="SEED_DEMO_USERS")
+    # Siembra del catálogo demo (sucursales, parámetros, 8 productos con variantes y
+    # stock por sucursal) para que ventas, inventario y vestidor AR funcionen con datos
+    # reales. Idempotente; desactivar en un despliegue con catálogo propio.
+    seed_demo_catalog: bool = Field(default=True, validation_alias="SEED_DEMO_CATALOG")
 
     @field_validator("cors_origins", mode="after")
     @classmethod

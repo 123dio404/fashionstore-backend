@@ -26,3 +26,6 @@ class MovementResponse(ORMModel):
 class AvailabilityResponse(BaseModel):
     product_id: int; variant_id: int; branch_id: int; physical_stock: int
     reserved_stock: int; available_stock: int
+    # CU10/CU11: identificador de la fila de inventario, que es lo que el carrito
+    # y el checkout necesitan para descontar stock de la sucursal correcta.
+    stock_id: int

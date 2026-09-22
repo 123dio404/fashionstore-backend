@@ -156,4 +156,4 @@ def availability(product_id: int, branch_id: int, db: Session = Depends(get_db))
         .join(ProductVariant)
         .where(ProductVariant.product_id == product_id, Stock.branch_id == branch_id)
     ).all()
-    return [AvailabilityResponse(product_id=product_id,variant_id=x.variant_id,branch_id=x.branch_id,physical_stock=x.physical_stock,reserved_stock=x.reserved_stock,available_stock=x.physical_stock-x.reserved_stock) for x in rows]
+    return [AvailabilityResponse(product_id=product_id,variant_id=x.variant_id,branch_id=x.branch_id,physical_stock=x.physical_stock,reserved_stock=x.reserved_stock,available_stock=x.physical_stock-x.reserved_stock,stock_id=x.id) for x in rows]

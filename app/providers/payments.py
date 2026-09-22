@@ -73,6 +73,31 @@ class InStorePaymentProvider(PaymentProvider):
         raise HTTPException(400, "In-store payments do not accept webhooks")
 
 
+class SimulatedPaymentProvider(PaymentProvider):
+    """Pasarela simulada del checkout (CU11 en modo demo).
+
+    Reproduce el contrato de una pasarela real —referencia de transacción, estado y
+    monto en centavos— sin contactar a nadie. Se usa mientras no haya claves de Stripe
+    vigentes: el resto del flujo (venta, pago, inventario y factura) es idéntico al de
+    producción, así que cambiar de proveedor no toca el servicio ni los clientes.
+    """
+
+    disclaimer = "Pago simulado con fines académicos: no se contactó ninguna pasarela."
+
+    def create_intent(self, amount, currency, idempotency_key, metadata):
+        return {
+            "id": f"SIM-{idempotency_key}",
+            "status": "succeeded",
+            "amount": int(Decimal(amount) * 100),
+            "currency": currency,
+            "payment_method": "simulado",
+            "disclaimer": self.disclaimer,
+        }
+
+    def verify_webhook(self, payload, signature):
+        raise HTTPException(400, "The simulated provider does not accept webhooks")
+
+
 class StripePaymentProvider(PaymentProvider):
     def create_intent(self, amount, currency, idempotency_key, metadata):
         if not settings.stripe_secret_key:
@@ -108,6 +133,8 @@ def get_payment_provider(name: str | None = None) -> PaymentProvider:
     mode = (name or settings.payment_provider).casefold()
     if mode in IN_STORE_PAYMENT_METHODS:
         return InStorePaymentProvider(IN_STORE_PAYMENT_METHODS[mode])
+    if mode in {"simulated", "simulado", "demo"}:
+        return SimulatedPaymentProvider()
     if mode == "stripe":
         return StripePaymentProvider()
     if mode == "mock" and settings.environment.casefold() in {"development", "test"}:

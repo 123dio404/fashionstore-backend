@@ -223,6 +223,31 @@ def get_sale(db: Session, sale_id: int) -> Sale:
     return sale
 
 
+def sale_lines(db: Session, sale_id: int) -> list[dict]:
+    """Detalle de la venta con el nombre de la prenda, la talla y el color.
+
+    Lo consume la factura en PDF: `detalle_venta` guarda la fila de inventario, así
+    que hay que subir por variante → producto para imprimir algo legible.
+    """
+    sale = get_sale(db, sale_id)
+    lines: list[dict] = []
+    for item in sale.items:
+        stock = db.get(Stock, item.stock_id)
+        variant = stock.variant if stock is not None else None
+        product = variant.product if variant is not None else None
+        lines.append(
+            {
+                "quantity": item.quantity,
+                "unit_price": item.unit_price,
+                "name": product.name if product is not None else f"Artículo #{item.stock_id}",
+                "brand": product.brand if product is not None else None,
+                "size": variant.size.name if variant is not None and variant.size else None,
+                "color": variant.color.name if variant is not None and variant.color else None,
+            }
+        )
+    return lines
+
+
 def list_sales(db: Session, client_id: int | None = None) -> list[Sale]:
     q = select(Sale).order_by(Sale.sale_date.desc(), Sale.id)
     if client_id is not None:

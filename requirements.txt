@@ -9,3 +9,5 @@ passlib[bcrypt]>=1.7.4
 python-jose[cryptography]>=3.3.0
 python-multipart>=0.0.20
 httpx>=0.27.0
+# Factura en PDF del CU11 (documento fiscal simulado).
+reportlab>=4.2.0
