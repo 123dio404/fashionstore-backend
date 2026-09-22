@@ -48,7 +48,9 @@ class Settings(BaseSettings):
     )
     ai_provider_mode: str = Field(default="disabled", validation_alias="AI_PROVIDER_MODE")
     gemini_api_key: str | None = Field(default=None, validation_alias="GEMINI_API_KEY")
-    gemini_model: str = Field(default="gemini-2.0-flash", validation_alias="GEMINI_MODEL")
+    # `gemini-2.0-flash` fue retirado por Google (devuelve 404); `gemini-flash-latest`
+    # apunta siempre al modelo flash vigente (`gemini-3.6-flash` también responde).
+    gemini_model: str = Field(default="gemini-flash-latest", validation_alias="GEMINI_MODEL")
     speech_provider_mode: str = Field(default="disabled", validation_alias="SPEECH_PROVIDER_MODE")
     google_speech_api_key: str | None = Field(default=None, validation_alias="GOOGLE_SPEECH_API_KEY")
     google_speech_language_code: str = Field(default="es-CO", validation_alias="GOOGLE_SPEECH_LANGUAGE_CODE")

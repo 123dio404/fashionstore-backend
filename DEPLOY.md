@@ -181,6 +181,22 @@ El repo incluye `render.yaml`: crea **en un mismo proyecto** el Web Service de l
 | `FISCAL_PROVIDER` | `simulated` emite la factura con IVA y número propios; `not_configured` responde 503 |
 | `AI_PROVIDER_MODE` / `SPEECH_PROVIDER_MODE` | `disabled` = respuestas deterministas; `gemini`/`google` requieren claves |
 
+### Claves de los CU que dependen de servicios externos
+
+| Variable | Valor que funciona hoy |
+| :-- | :-- |
+| `AI_PROVIDER_MODE` | `gemini` — habilita chatbot, recomendaciones y consulta analítica |
+| `GEMINI_API_KEY` | clave de Google AI Studio (formato `AIza…` o `AQ.…`) |
+| `GEMINI_MODEL` | `gemini-flash-latest` (o `gemini-3.6-flash`); **`gemini-2.0-flash` fue retirado y devuelve 404** |
+| `PAYMENT_PROVIDER` | `stripe` para el checkout del CU11; la caja del CU12 usa `efectivo`/`tarjeta`/`datafono` |
+| `STRIPE_SECRET_KEY` | clave **de pruebas** vigente (`sk_test_…`). Si se publica en un chat o repo, Stripe la revoca automáticamente: hay que rotarla y pegarla solo en el dashboard |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_…` del endpoint `POST /api/v1/commerce/payments/stripe/webhook` |
+| `FISCAL_PROVIDER` | `simulated` — emite la factura con IVA y aviso de que no tiene validez fiscal |
+
+En Render/Railway estos valores se pegan en **Environment → Environment Variables** del
+servicio; los cambios se aplican al redesplegar. El archivo `.env` local está en
+`.gitignore` y nunca debe subirse.
+
 ## Actualizar una versión desplegada
 
 ```bash
