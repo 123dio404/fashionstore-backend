@@ -35,7 +35,14 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title=settings.app_name, version='1.0.0', lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app)(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
 app.include_router(api_router)
 
 @app.get('/health', tags=['health'])
