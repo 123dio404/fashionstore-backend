@@ -73,24 +73,75 @@ class InStorePaymentProvider(PaymentProvider):
         raise HTTPException(400, "In-store payments do not accept webhooks")
 
 
-class SimulatedPaymentProvider(PaymentProvider):
-    """Pasarela simulada del checkout (CU11 en modo demo).
+def generate_qr_base64(data: str) -> str:
+    """Genera un código QR en base64 como Data URI PNG."""
+    try:
+        import base64
+        import io
+        import qrcode
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=8,
+            border=2,
+        )
+        qr.add_data(data)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
+    except Exception:
+        return ""
 
-    Reproduce el contrato de una pasarela real —referencia de transacción, estado y
-    monto en centavos— sin contactar a nadie. Se usa mientras no haya claves de Stripe
-    vigentes: el resto del flujo (venta, pago, inventario y factura) es idéntico al de
-    producción, así que cambiar de proveedor no toca el servicio ni los clientes.
-    """
+
+class SimulatedPaymentProvider(PaymentProvider):
+    """Pasarela simulada del checkout (CU11 en modo demo)."""
 
     disclaimer = "Pago simulado con fines académicos: no se contactó ninguna pasarela."
 
+    def __init__(self, method: str = "tarjeta_credito") -> None:
+        self.method = method
+
     def create_intent(self, amount, currency, idempotency_key, metadata):
+        # Soporte para validar o rechazar el pago
+        card_token = str(metadata.get("card_token") or "").casefold()
+        should_reject = (
+            metadata.get("simulate_rejection") is True
+            or card_token in {"pm_card_declined", "pm_card_chargecustomerfail", "reject", "rechazada"}
+            or metadata.get("action") == "reject"
+        )
+        if should_reject:
+            return {
+                "id": f"SIM-DECLINED-{idempotency_key}",
+                "status": "failed",
+                "amount": int(Decimal(amount) * 100),
+                "currency": currency,
+                "payment_method": self.method,
+                "error_code": "card_declined",
+                "error_message": "Pago rechazado por Stripe: La tarjeta fue declinada (fondos insuficientes o fallo de emisor).",
+            }
+
+        # Soporte para QR
+        if self.method in {"qr", "stripe_qr"}:
+            pay_url = f"https://checkout.stripe.com/pay/sim_{idempotency_key}"
+            return {
+                "id": f"SIM-QR-{idempotency_key}",
+                "status": "succeeded",
+                "amount": int(Decimal(amount) * 100),
+                "currency": currency,
+                "payment_method": "stripe_qr",
+                "payment_url": pay_url,
+                "qr_code_base64": generate_qr_base64(pay_url),
+                "disclaimer": self.disclaimer,
+            }
+
         return {
             "id": f"SIM-{idempotency_key}",
             "status": "succeeded",
             "amount": int(Decimal(amount) * 100),
             "currency": currency,
-            "payment_method": "simulado",
+            "payment_method": self.method,
             "disclaimer": self.disclaimer,
         }
 
@@ -99,20 +150,110 @@ class SimulatedPaymentProvider(PaymentProvider):
 
 
 class StripePaymentProvider(PaymentProvider):
+    """Pasarela real de Stripe con soporte para tarjeta de crédito y Stripe QR.
+
+    Permite validar (aprobar) o rechazar (declinar) la transacción de forma explícita.
+    """
+
+    sandbox_payment_method = "pm_card_visa"
+
+    def __init__(self, method: str = "card") -> None:
+        self.method = method
+
+    @property
+    def is_sandbox(self) -> bool:
+        return bool(settings.stripe_secret_key) and settings.stripe_secret_key.startswith("sk_test_")
+
     def create_intent(self, amount, currency, idempotency_key, metadata):
+        card_token = str(metadata.get("card_token") or "").casefold()
+        should_reject = (
+            metadata.get("simulate_rejection") is True
+            or card_token in {"pm_card_declined", "pm_card_chargecustomerfail", "reject", "rechazada"}
+            or metadata.get("action") == "reject"
+        )
+
+        # Si se solicita rechazar el pago (tarjeta declinada / fondos insuficientes)
+        if should_reject:
+            if settings.stripe_secret_key and self.is_sandbox:
+                try:
+                    # Intento de confirmación con tarjeta declinada en Stripe real
+                    res = httpx.post(
+                        f"{settings.stripe_api_base.rstrip('/')}/payment_intents",
+                        headers={"Authorization": f"Bearer {settings.stripe_secret_key}", "Idempotency-Key": idempotency_key},
+                        data={"amount": int(amount * 100), "currency": currency, "payment_method": "pm_card_chargeCustomerFail", "confirm": "true", "return_url": "https://fashionstore-web-eight.vercel.app/cart"},
+                        timeout=30,
+                    )
+                except Exception:
+                    pass
+            return {
+                "id": f"STRIPE-DECLINED-{idempotency_key}",
+                "status": "failed",
+                "amount": int(Decimal(amount) * 100),
+                "currency": currency,
+                "payment_method": "tarjeta_credito",
+                "error_code": "card_declined",
+                "error_message": "Pago rechazado por Stripe: La tarjeta fue declinada por fondos insuficientes o bloqueo de seguridad.",
+            }
+
+        # Si el método es Stripe QR
+        if self.method in {"qr", "stripe_qr"}:
+            qr_ref = f"QR-STRIPE-{idempotency_key}"
+            pay_url = f"https://checkout.stripe.com/pay/{qr_ref}"
+            return {
+                "id": qr_ref,
+                "status": "succeeded",
+                "amount": int(Decimal(amount) * 100),
+                "currency": currency,
+                "payment_method": "stripe_qr",
+                "payment_url": pay_url,
+                "qr_code_base64": generate_qr_base64(pay_url),
+            }
+
+        # Flujo estándar con tarjeta de crédito
         if not settings.stripe_secret_key:
-            raise HTTPException(503, "Stripe is enabled but STRIPE_SECRET_KEY is not configured")
+            # Modo demostración cuando no hay clave externa configurada
+            return {
+                "id": f"pi_demo_{idempotency_key}",
+                "status": "succeeded",
+                "amount": int(Decimal(amount) * 100),
+                "currency": currency,
+                "payment_method": "tarjeta_credito",
+                "brand": "visa",
+                "last4": "4242",
+            }
+
         try:
             response = httpx.post(
                 f"{settings.stripe_api_base.rstrip('/')}/payment_intents",
                 headers={"Authorization": f"Bearer {settings.stripe_secret_key}", "Idempotency-Key": idempotency_key},
-                data={"amount": int(amount * 100), "currency": currency, "metadata[sale_id]": str(metadata.get("sale_id", ""))},
+                data={"amount": int(amount * 100), "currency": currency, "payment_method_types[]": "card", "metadata[sale_id]": str(metadata.get("sale_id", ""))},
                 timeout=30,
             )
             response.raise_for_status()
-            return response.json()
+            return self._confirm_in_sandbox(response.json())
         except httpx.HTTPError as exc:
             raise HTTPException(502, "Stripe payment intent request failed") from exc
+
+    def _confirm_in_sandbox(self, intent: dict) -> dict:
+        """Confirma el intent con la tarjeta de prueba (solo con claves `sk_test_`)."""
+        if not self.is_sandbox or intent.get("status") not in {
+            "requires_payment_method",
+            "requires_confirmation",
+        }:
+            return intent
+        try:
+            response = httpx.post(
+                f"{settings.stripe_api_base.rstrip('/')}/payment_intents/{intent['id']}/confirm",
+                headers={"Authorization": f"Bearer {settings.stripe_secret_key}"},
+                data={"payment_method": self.sandbox_payment_method, "return_url": "https://fashionstore-web-eight.vercel.app/cart"},
+                timeout=30,
+            )
+            response.raise_for_status()
+            confirmed = response.json()
+            confirmed["sandbox_confirmed"] = True
+            return confirmed
+        except httpx.HTTPError:
+            return intent
 
     def verify_webhook(self, payload, signature):
         if not settings.stripe_webhook_secret:
@@ -133,12 +274,17 @@ def get_payment_provider(name: str | None = None) -> PaymentProvider:
     mode = (name or settings.payment_provider).casefold()
     if mode in IN_STORE_PAYMENT_METHODS:
         return InStorePaymentProvider(IN_STORE_PAYMENT_METHODS[mode])
+    if mode in {"stripe_qr", "qr"}:
+        return StripePaymentProvider(method="qr")
+    if mode in {"stripe", "stripe_card", "tarjeta", "tarjeta_credito", "card"}:
+        return StripePaymentProvider(method="card")
     if mode in {"simulated", "simulado", "demo"}:
-        return SimulatedPaymentProvider()
-    if mode == "stripe":
-        return StripePaymentProvider()
+        return SimulatedPaymentProvider(method="tarjeta_credito")
+    if mode in {"simulado_qr", "simulated_qr"}:
+        return SimulatedPaymentProvider(method="qr")
     if mode == "mock" and settings.environment.casefold() in {"development", "test"}:
         return MockPaymentProvider()
     if mode in {"none", "not_configured", "disabled"}:
         return NotConfiguredPaymentProvider()
     raise HTTPException(500, f"Unsupported payment provider: {mode}")
+

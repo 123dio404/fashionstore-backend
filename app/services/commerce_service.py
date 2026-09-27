@@ -32,7 +32,7 @@ from app.schemas.commerce import (
     SalePaymentResponse,
     SaleResponse,
 )
-from app.providers import IN_STORE_PAYMENT_METHODS, get_payment_provider
+from app.providers import IN_STORE_PAYMENT_METHODS, get_payment_provider, get_notification_provider
 from app.core.config import settings
 
 
@@ -159,20 +159,87 @@ def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
     db.flush()
     provider = get_payment_provider(data.payment_provider)
     intent = provider.create_intent(
-        total, "usd", data.idempotency_key or f"sale-{sale.id}", {"sale_id": sale.id}
+        total,
+        "usd",
+        data.idempotency_key or f"sale-{sale.id}",
+        {
+            "sale_id": sale.id,
+            "card_token": data.card_token,
+            "simulate_rejection": data.simulate_rejection,
+        },
     )
-    status = PaymentStatus.COMPLETADO.value if intent.get("status") == "succeeded" else PaymentStatus.PENDIENTE.value
-    sale.payments.append(SalePayment(amount=total, status=status, paid_at=datetime.now(timezone.utc) if status == "completado" else None,
-                                     reference=intent.get("id") or data.payment_reference))
+    intent_status = intent.get("status")
+    if intent_status == "succeeded":
+        status = PaymentStatus.COMPLETADO.value
+    elif intent_status in {"failed", "declined"}:
+        status = PaymentStatus.FALLIDO.value
+    else:
+        status = PaymentStatus.PENDIENTE.value
+
+    payment_ref = intent.get("id") or data.payment_reference
+    sale.payments.append(
+        SalePayment(
+            amount=total,
+            status=status,
+            paid_at=datetime.now(timezone.utc) if status == PaymentStatus.COMPLETADO.value else None,
+            reference=payment_ref,
+        )
+    )
+
     if status == PaymentStatus.COMPLETADO.value:
         for ci, stock in locked_items:
             stock.physical_stock -= ci.quantity
             sale.items.append(SaleItem(stock_id=ci.stock_id, quantity=ci.quantity, unit_price=ci.price))
             db.add(InventoryMovement(movement_type=MovementType.VENTA, inventory_id=stock.id, quantity=-ci.quantity, reason="Venta digital"))
         cart.status = "completado"
-    db.commit()
-    db.refresh(sale)
-    return sale
+        db.commit()
+        db.refresh(sale)
+        # Notificación exitosa
+        get_notification_provider().send(
+            event="sale.completed",
+            sale_id=sale.id,
+            channel="in_app",
+            status="aprobado",
+            total=total,
+            reference=payment_ref,
+            payment_method=data.payment_provider,
+            invoice_number=f"FAC-{sale.id:012d}",
+        )
+        return sale
+    elif status == PaymentStatus.FALLIDO.value:
+        # Pago rechazado: No descontar inventario, dejar carrito intacto
+        db.commit()
+        db.refresh(sale)
+        error_msg = intent.get("error_message") or "Pago rechazado por la pasarela: Fondos insuficientes o tarjeta declinada."
+        get_notification_provider().send(
+            event="sale.rejected",
+            sale_id=sale.id,
+            channel="in_app",
+            status="rechazado",
+            total=total,
+            reference=payment_ref,
+            payment_method=data.payment_provider,
+            invoice_number=f"FAC-{sale.id:012d}",
+        )
+        raise HTTPException(status_code=402, detail=error_msg)
+    else:
+        db.commit()
+        db.refresh(sale)
+        return sale
+
+
+def generate_qr_payment(amount: Decimal = Decimal("50.00"), currency: str = "usd") -> dict:
+    from app.providers.payments import generate_qr_base64
+    ref = f"STRIPE-QR-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+    payment_url = f"https://checkout.stripe.com/pay/{ref}"
+    qr_b64 = generate_qr_base64(payment_url)
+    return {
+        "reference": ref,
+        "qr_code_base64": qr_b64,
+        "payment_url": payment_url,
+        "amount": amount,
+        "currency": currency,
+    }
 
 
 def apply_payment_event(db: Session, event: dict) -> Sale | None:

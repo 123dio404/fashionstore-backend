@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -6,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.commerce import Sale, SaleItem
+from app.models.user import User
 from app.models.customer_experience import (
     ChatConversation, ChatMessage,
     Recommendation,
@@ -176,10 +178,32 @@ def _preference_payload(preference: UserPreference | None) -> dict | None:
 
 
 def generate_recommendations(db: Session, user_id: int, limit: int = 10) -> Recommendation:
+    user = db.get(User, user_id)
     preference = get_preferences(db, user_id)
     active_seasons = _active_season_ids(db)
     preferred_sizes = _preferred_size_ids(preference)
     preferred_colors = _preferred_color_names(preference)
+
+    all_sizes = {s.id: s.name for s in db.scalars(select(Size)).all()}
+    all_categories = {c.id: c.name for c in db.scalars(select(Category)).all()}
+    all_seasons = {s.id: s.name for s in db.scalars(select(Season)).all()}
+
+    preferred_size_names = [all_sizes[sid] for sid in preferred_sizes if sid in all_sizes]
+    active_season_names = [all_seasons[sid] for sid in active_seasons if sid in all_seasons]
+    preferred_category_name = all_categories.get(preference.category_id, "") if preference and preference.category_id else ""
+
+    past_purchases = list(
+        db.scalars(
+            select(Product.name)
+            .join(ProductVariant, ProductVariant.product_id == Product.id)
+            .join(Stock, Stock.variant_id == ProductVariant.id)
+            .join(SaleItem, SaleItem.stock_id == Stock.id)
+            .join(Sale, Sale.id == SaleItem.sale_id)
+            .where(Sale.client_id == user_id)
+            .distinct()
+        ).all()
+    )
+
     purchased_categories = {
         row[0]: row[1]
         for row in db.execute(
@@ -205,6 +229,8 @@ def generate_recommendations(db: Session, user_id: int, limit: int = 10) -> Reco
     )
     # (producto, puntaje, motivo, tipo de recomendación, stock disponible)
     scored: list[tuple[Product, Decimal, str, str, int]] = []
+    candidates_for_ai = []
+
     for product in products:
         available = sum(_variant_available(variant) for variant in product.variants)
         if available <= 0:
@@ -228,13 +254,16 @@ def generate_recommendations(db: Session, user_id: int, limit: int = 10) -> Reco
             score += min(CU18_WEIGHT_HISTORY, Decimal(purchased))
             reasons.append(HISTORY_REASON)
         in_stock = [variant for variant in product.variants if _variant_available(variant) > 0]
+        p_sizes = [all_sizes.get(v.size_id) for v in in_stock if v.size_id and all_sizes.get(v.size_id)]
+        p_colors = [v.color.name for v in in_stock if v.color and v.color.name]
+
         if preferred_sizes and any(
             (variant.size_id in preferred_sizes)
             or any(stock.size_id in preferred_sizes for stock in variant.stocks if stock.available_stock > 0)
             for variant in in_stock
         ):
             score += CU18_WEIGHT_SIZE
-            reasons.append("talla preferida")
+            reasons.append(f"talla {', '.join(set(p_sizes) & set(preferred_size_names)) or 'preferida'}")
         if preferred_colors and any(
             variant.color is not None and (variant.color.name or "").strip().casefold() in preferred_colors
             for variant in in_stock
@@ -243,31 +272,69 @@ def generate_recommendations(db: Session, user_id: int, limit: int = 10) -> Reco
             reasons.append("color preferido")
         if product.season_id is not None and product.season_id in active_seasons:
             score += CU18_WEIGHT_SEASON
-            reasons.append(SEASONAL_REASON)
+            reasons.append(f"temporada {all_seasons.get(product.season_id, '')}")
         score += min(CU18_WEIGHT_AVAILABILITY, Decimal(available))
         score = min(CU18_MAX_SCORE, score)
+
+        default_reason = ", ".join(reasons) or "disponibilidad en catálogo"
         scored.append(
-            (product, score, ", ".join(reasons) or "disponibilidad", _recommendation_type(reasons), available)
+            (product, score, default_reason, _recommendation_type(reasons), available)
         )
+        candidates_for_ai.append({
+            "id": product.id,
+            "name": product.name,
+            "category": all_categories.get(product.category_id, ""),
+            "brand": product.brand or "",
+            "price": str(product.price),
+            "season": all_seasons.get(product.season_id, ""),
+            "available_sizes": list(set(p_sizes)),
+            "available_colors": list(set(p_colors)),
+        })
+
     scored.sort(key=lambda item: (-item[1], item[0].id))
     provider = get_ai_provider()
-    if provider.__class__.__name__ != "DisabledAIProvider":
+    if provider.__class__.__name__ != "DisabledAIProvider" and candidates_for_ai:
         prompt = (
-            "You are FashionStore's recommendation engine. Rank products for a customer. "
-            "Return JSON {\"products\":[{\"id\":number,\"reason\":\"short reason\"}]}. "
-            f"Customer preferences: {_preference_payload(preference)}. "
-            f"Products: {[{'id': p.id, 'name': p.name, 'price': str(p.price), 'category_id': p.category_id} for p, _, _, _, _ in scored]}"
+            "Eres el motor de recomendación inteligente con IA de la tienda FashionStore.\n"
+            "Tu tarea es seleccionar y ordenar las mejores prendas para el cliente evaluando obligatoriamente:\n"
+            "1. TALLA: Si la prenda cuenta con disponibilidad en las tallas preferidas del cliente.\n"
+            "2. TEMPORADA: Adecuación climática para la temporada comercial activa.\n"
+            "3. DATOS Y PERFIL DEL CLIENTE: Estilo, marcas y colores favoritos, e historial de compras.\n\n"
+            "DATOS DEL CLIENTE:\n"
+            f"- Nombre: {user.full_name if user else 'Cliente'}\n"
+            f"- Tallas preferidas: {', '.join(preferred_size_names) if preferred_size_names else 'No especificada'}\n"
+            f"- Colores preferidos: {', '.join(preferred_colors) if preferred_colors else 'No especificado'}\n"
+            f"- Marca favorita: {preference.preferred_brand if preference and preference.preferred_brand else 'Cualquiera'}\n"
+            f"- Categoría favorita: {preferred_category_name or 'Cualquiera'}\n"
+            f"- Temporada activa: {', '.join(active_season_names) if active_season_names else 'General'}\n"
+            f"- Compras anteriores: {', '.join(past_purchases) if past_purchases else 'Ninguna previa'}\n\n"
+            f"PRENDAS CON STOCK DISPONIBLE:\n"
+            f"{json.dumps(candidates_for_ai[:15], ensure_ascii=False)}\n\n"
+            "INSTRUCCIONES:\n"
+            "Genera un ranking de hasta 10 prendas más recomendadas. Para cada prenda escribe un 'reason' personalizado en español (máx 15 palabras) "
+            "explicando por qué le conviene según su talla, la temporada o su estilo.\n"
+            "Responde ÚNICAMENTE con un JSON válido con este formato:\n"
+            '{"products": [{"id": 1, "reason": "Perfecto para esta temporada en tu talla M preferida.", "score": 95}]}'
         )
-        ranked = provider.generate_json(prompt).get("products", [])
-        by_id = {product.id: (product, score, reason, kind, available) for product, score, reason, kind, available in scored}
-        ai_scored = []
-        for item in ranked:
-            if isinstance(item, dict) and item.get("id") in by_id:
-                product, score, default_reason, kind, available = by_id[item["id"]]
-                ai_scored.append((product, score, str(item.get("reason") or default_reason), kind, available))
-        if ai_scored:
-            scored = ai_scored + [item for item in scored if item[0].id not in {x[0].id for x in ai_scored}]
+        try:
+            ai_data = provider.generate_json(prompt)
+            ranked = ai_data.get("products", [])
+            by_id = {product.id: (product, score, reason, kind, available) for product, score, reason, kind, available in scored}
+            ai_scored = []
+            for item in ranked:
+                if isinstance(item, dict) and item.get("id") in by_id:
+                    product, orig_score, default_reason, kind, available = by_id[item["id"]]
+                    ai_reason = str(item.get("reason") or default_reason)
+                    ai_score = Decimal(str(item.get("score") or orig_score))
+                    ai_scored.append((product, ai_score, ai_reason, kind, available))
+            if ai_scored:
+                seen_ids = {x[0].id for x in ai_scored}
+                scored = ai_scored + [item for item in scored if item[0].id not in seen_ids]
+        except Exception:
+            # Si falla la llamada externa de IA, el ranking determinista garantiza disponibilidad
+            pass
     top = scored[:limit]
+
     # El documento describe `tipo` como la categoría o tipo de recomendación estilística.
     recommendation_type = top[0][3] if top else "disponibilidad"
     # El documento define el estado del aviso como Pendiente al generarse.

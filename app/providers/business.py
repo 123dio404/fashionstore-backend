@@ -59,9 +59,43 @@ class SimulatedFiscalProvider(FiscalProvider):
         }
 
 
-class NotConfiguredNotificationProvider(NotificationProvider):
-    def send(self, *args, **kwargs):
-        raise HTTPException(503, "Notification provider is not configured")
+class AppNotificationProvider(NotificationProvider):
+    """Proveedor de notificaciones de compra y transacciones para clientes."""
+
+    def send(self, event: str = "sale.updated", sale_id: int | None = None, channel: str = "in_app", **kwargs) -> dict:
+        now = datetime.now(timezone.utc)
+        method = kwargs.get("payment_method") or "digital"
+        status = kwargs.get("status") or "aprobado"
+        total = kwargs.get("total") or "0.00"
+        reference = kwargs.get("reference") or (f"TX-{sale_id}" if sale_id else "TX-DEMO")
+        invoice_number = kwargs.get("invoice_number") or (f"FAC-{sale_id:012d}" if sale_id else "N/A")
+
+        if str(status).lower() in {"rechazado", "fallido", "declined", "failed"}:
+            title = f"Transacción rechazada · Pedido #{sale_id or 'N/A'}"
+            message = (
+                f"Tu pago de ${total} no pudo procesarse. La pasarela Stripe rechazó la transacción "
+                f"(fondos insuficientes o tarjeta declinada). No se realizó ningún cargo."
+            )
+        else:
+            title = f"¡Compra confirmada! · Pedido #{sale_id}"
+            message = (
+                f"Tu pago de ${total} mediante {method} fue aprobado exitosamente. "
+                f"Transacción: {reference}. Tu factura {invoice_number} ya fue emitida."
+            )
+
+        return {
+            "id": f"NOTIF-{sale_id or 0}-{int(now.timestamp())}",
+            "sale_id": sale_id,
+            "channel": channel,
+            "event": event,
+            "title": title,
+            "message": message,
+            "amount": str(total),
+            "status": status,
+            "transaction_reference": reference,
+            "invoice_number": invoice_number,
+            "created_at": now.isoformat(),
+        }
 
 
 def get_fiscal_provider() -> FiscalProvider:
@@ -72,4 +106,4 @@ def get_fiscal_provider() -> FiscalProvider:
 
 
 def get_notification_provider() -> NotificationProvider:
-    return NotConfiguredNotificationProvider()
+    return AppNotificationProvider()

@@ -12,6 +12,8 @@ from app.schemas.commerce import (
     CheckoutRequest,
     InvoiceResponse,
     PosSaleCreate,
+    QrPaymentRequest,
+    QrPaymentResponse,
     ReservationCreate,
     ReservationResponse,
     ReservationStatus,
@@ -74,7 +76,29 @@ def send_sale_notification(sale_id: int, channel: str = "email",
     sale = commerce_service.get_sale(db, sale_id)
     if user.role not in PRIVILEGED and sale.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
-    return get_notification_provider().send(event="sale.updated", sale_id=sale.id, channel=channel)
+    payment = sale.payments[-1] if sale.payments else None
+    return get_notification_provider().send(
+        event="sale.updated",
+        sale_id=sale.id,
+        channel=channel,
+        status="aprobado" if payment and payment.status == "completado" else "pendiente",
+        total=sale.total,
+        reference=payment.reference if payment else None,
+        invoice_number=f"FAC-{sale.id:012d}",
+    )
+
+
+@router.post('/payments/qr', response_model=QrPaymentResponse)
+def create_qr_payment(
+    data: QrPaymentRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    amount = data.amount
+    if amount is None:
+        cart = commerce_service.get_cart(db, user.id)
+        amount = cart.total if cart.total > 0 else Decimal("50.00")
+    return commerce_service.generate_qr_payment(amount=amount, currency=data.currency)
 
 
 @router.get('/cart', response_model=CartResponse)

@@ -73,6 +73,22 @@ class CheckoutRequest(BaseModel):
     payment_status: PaymentStatus = PaymentStatus.PENDIENTE
     payment_reference: str | None = None
     idempotency_key: str | None = None
+    card_token: str | None = None
+    simulate_rejection: bool = False
+
+
+class QrPaymentRequest(BaseModel):
+    amount: Decimal | None = None
+    currency: str = "usd"
+    description: str = "Pago FashionStore"
+
+
+class QrPaymentResponse(BaseModel):
+    reference: str
+    qr_code_base64: str
+    payment_url: str
+    amount: Decimal
+    currency: str
 
 
 class SaleItemInput(BaseModel):

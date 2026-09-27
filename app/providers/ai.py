@@ -13,12 +13,31 @@ class AIProvider(ABC):
 
     def generate_json(self, prompt: str) -> dict:
         text = self.generate_text(
-            f"{prompt}\nReturn only a valid JSON object, without markdown fences."
+            f"{prompt}\nReturn only a valid JSON object, without markdown fences or additional commentary."
         )
         try:
-            return json.loads(text)
-        except (TypeError, json.JSONDecodeError) as exc:
-            raise HTTPException(502, "AI provider returned invalid JSON") from exc
+            # Primero intentar parsear directamente
+            return json.loads(text.strip())
+        except (TypeError, json.JSONDecodeError):
+            pass
+
+        import re
+        # Limpiar bloques de markdown
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.MULTILINE).strip()
+        try:
+            return json.loads(cleaned)
+        except (TypeError, json.JSONDecodeError):
+            pass
+
+        # Buscar el bloque JSON más externo {...}
+        match = re.search(r"(\{.*\})", text, flags=re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except (TypeError, json.JSONDecodeError):
+                pass
+
+        raise HTTPException(502, f"AI provider returned invalid JSON: {text[:150]}")
 
 
 class DisabledAIProvider(AIProvider):
