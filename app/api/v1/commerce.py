@@ -225,3 +225,31 @@ def delete_reservation(
     if user.role not in RESERVATION_STAFF and reservation.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     commerce_service.delete_reservation(db, reservation_id)
+
+
+@router.post('/reservations/{reservation_id}/cancel', response_model=ReservationResponse)
+def cancel_reservation(
+    reservation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """
+    Cancela una reserva y libera inmediatamente el stock reservado para que vuelva a estar a la venta.
+    Puede ser ejecutado por el propio cliente o por el personal de tienda.
+    """
+    reservation = commerce_service.get_reservation(db, reservation_id)
+    if user.role not in RESERVATION_STAFF and reservation.client_id != user.id:
+        raise HTTPException(status_code=403, detail='Insufficient permissions')
+    return commerce_service.cancel_reservation(db, reservation_id)
+
+
+@router.post('/reservations/{reservation_id}/complete', response_model=SaleResponse)
+def complete_reservation(
+    reservation_id: int,
+    user: User = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO, Role.CAJERO)),
+    db: Session = Depends(get_db),
+):
+    """
+    Convierte una reserva en una venta formal de contado cuando el cliente se presenta a retirar la prenda.
+    Descuenta definitivamente el stock físico y completa la reserva.
+    """
+    sale = commerce_service.convert_reservation_to_sale(db, reservation_id, cashier_id=user.id)
+    return commerce_service.sale_response(db, sale)

@@ -623,3 +623,69 @@ def get_receipt(db: Session, sale_id: int) -> ReceiptResponse:
         subtotal=sale.total, total=sale.total, payment_status=status,
         items=[{"id": i.id, "stock_id": i.stock_id, "quantity": i.quantity, "unit_price": i.unit_price} for i in sale.items],
     )
+
+
+def cancel_reservation(db: Session, reservation_id: int) -> Reservation:
+    """Cancela una reserva y libera de inmediato el stock reservado para venta disponible."""
+    reservation = get_reservation(db, reservation_id)
+    if reservation.status in ("cancelada", "completada"):
+        raise HTTPException(status_code=400, detail=f"No se puede cancelar una reserva en estado '{reservation.status}'")
+    _release_reserved(db, reservation)
+    reservation.status = "cancelada"
+    db.commit()
+    db.refresh(reservation)
+    return reservation
+
+
+def convert_reservation_to_sale(
+    db: Session, reservation_id: int, cashier_id: int, payment_provider: str = "efectivo"
+) -> Sale:
+    """
+    Convierte una reserva activa en una venta formal de contado cuando el cliente se presenta en tienda.
+    Descuenta definitivamente el stock físico y libera la reserva.
+    """
+    reservation = get_reservation(db, reservation_id)
+    if reservation.status in ("cancelada", "completada"):
+        raise HTTPException(status_code=400, detail=f"Reserva en estado '{reservation.status}' no puede convertirse a venta")
+
+    now = datetime.now(timezone.utc)
+    # Consumir el stock reservado
+    _consume_reserved(db, reservation)
+    _release_reserved(db, reservation)
+    reservation.status = "completada"
+    reservation.checked_out_at = now
+
+    # Calcular total y crear items de venta
+    total = Decimal("0.00")
+    sale_items: list[SaleItem] = []
+    for item in reservation.items:
+        stock = db.get(Stock, item.stock_id)
+        unit_price = stock.variant.price if stock and stock.variant else Decimal("0.00")
+        line_total = unit_price * item.quantity
+        total += line_total
+        sale_items.append(
+            SaleItem(stock_id=item.stock_id, quantity=item.quantity, unit_price=unit_price)
+        )
+
+    sale = Sale(
+        client_id=reservation.client_id,
+        user_id=cashier_id,
+        branch_id=reservation.branch_id,
+        tenant_id=reservation.tenant_id,
+        sale_date=now,
+        total=total,
+        sale_type="Reserva Entregada (Contado)",
+        items=sale_items,
+        payments=[
+            SalePayment(
+                amount=total,
+                status=PaymentStatus.COMPLETADO.value,
+                paid_at=now,
+                reference=f"RES-{reservation.id:08d}-SALE",
+            )
+        ],
+    )
+    db.add(sale)
+    db.commit()
+    db.refresh(sale)
+    return sale
