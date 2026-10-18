@@ -46,6 +46,7 @@ class Product(Base):
     __tablename__ = "producto"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column("id_empresa", ForeignKey("empresa.id", ondelete="CASCADE"), nullable=True, index=True)
     category_id: Mapped[int] = mapped_column("id_categoria", ForeignKey("categoria.id", ondelete="RESTRICT"))
     season_id: Mapped[int | None] = mapped_column("id_temporada", ForeignKey("temporada.id", ondelete="SET NULL"), nullable=True)
     name: Mapped[str] = mapped_column("nombre", String(150), index=True)

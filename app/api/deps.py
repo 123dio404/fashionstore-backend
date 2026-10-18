@@ -36,3 +36,32 @@ def require_role(*roles: Role | str) -> Callable:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Insufficient permissions')
         return current_user
     return dependency
+
+def get_current_tenant_id(current_user: User = Depends(get_current_user)) -> int | None:
+    """Retorna el ID de la empresa a la que pertenece el usuario autenticado (o None si es Superadmin)."""
+    return current_user.tenant_id
+
+def require_tenant(current_user: User = Depends(get_current_user)) -> int:
+    """Exige que el usuario pertenezca a un tenant específico para operaciones comerciales o administrativas."""
+    if current_user.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operación requiere pertenecer a una empresa contratante (tenant)"
+        )
+    return current_user.tenant_id
+
+def require_ai_plan(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Verifica que la empresa del usuario tenga contratado el Plan Profesional con IA habilitada."""
+    from app.models.tenant import Subscription, Tenant
+    if current_user.tenant_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario sin empresa asignada")
+    sub = db.query(Subscription).filter(
+        Subscription.tenant_id == current_user.tenant_id,
+        Subscription.status == "Activa"
+    ).first()
+    if not sub or not sub.plan or not sub.plan.has_ai_reports:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Los reportes generativos mediante IA están reservados para empresas con Plan Profesional. Actualice su suscripción."
+        )
+    return sub

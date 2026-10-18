@@ -16,5 +16,6 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 @router.post('/login', response_model=LoginResponse)
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(db, form.username, form.password)
-    if user is None: raise HTTPException(status_code=401, detail='Incorrect email or password', headers={'WWW-Authenticate': 'Bearer'})
-    return {'access_token': create_access_token(user.id, claims={'role': user.role.value}), 'token_type': 'bearer', 'user': user}
+    role_val = user.role.value if user.role else 'Cliente'
+    claims = {'role': role_val, 'tenant_id': user.tenant_id}
+    return {'access_token': create_access_token(user.id, claims=claims), 'token_type': 'bearer', 'user': user}
