@@ -18,6 +18,7 @@ class TokenResponse(BaseModel):
 
 class UserResponse(ORMModel):
     id: int
+    tenant_id: int | None = None
     email: str
     full_name: str
     role: Role | None

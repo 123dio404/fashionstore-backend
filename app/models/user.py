@@ -6,9 +6,11 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.branch import Branch
+    from app.models.tenant import Tenant
 
 
 class Role(str, enum.Enum):
+    SUPERADMIN = "Superadmin"
     ADMINISTRADOR = "Administrador"
     ENCARGADO = "Encargado"
     CAJERO = "Cajero"
@@ -20,12 +22,14 @@ class User(Base):
     __tablename__ = "usuario"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column("id_empresa", ForeignKey("empresa.id", ondelete="SET NULL"), nullable=True, index=True)
     full_name: Mapped[str] = mapped_column("nombre", String(150))
     email: Mapped[str] = mapped_column(String(150), unique=True, index=True)
     telefono: Mapped[str | None] = mapped_column("telefono", String(20), nullable=True)
     password_hash: Mapped[str] = mapped_column("password", String(255))
     is_active: Mapped[bool] = mapped_column("estado", Boolean, default=True, nullable=False)
 
+    tenant: Mapped["Tenant | None"] = relationship(back_populates="users")
     roles: Mapped[list["Rol"]] = relationship(secondary="usuario_rol", back_populates="usuarios")
 
     @property

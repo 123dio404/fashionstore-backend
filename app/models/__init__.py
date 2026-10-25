@@ -30,6 +30,8 @@ from app.models.customer_experience import (
 )
 from app.models.marketing import Collection, Promotion
 from app.models.supplier import ProductSupplier, Supplier
+from app.models.exchange import GarmentExchange
+from app.models.tenant import Plan, Subscription, Tenant
 from app.models.user import Role, Rol, User, UsuarioRol
 
 __all__ = [
@@ -51,12 +53,14 @@ __all__ = [
     "FeeType",
     "Fine",
     "FineStatus",
+    "GarmentExchange",
     "InventoryMovement",
     "MaintenanceTask",
     "MovementType",
     "Payment",
     "PaymentMethod",
     "PaymentStatus",
+    "Plan",
     "Priority",
     "Product",
     "ProductSupplier",
@@ -74,8 +78,10 @@ __all__ = [
     "Season",
     "Size",
     "Stock",
+    "Subscription",
     "Supplier",
     "TaskStatus",
+    "Tenant",
     "User",
     "UserPreference",
     "UsuarioRol",

@@ -1,0 +1,501 @@
+cliente_id,tenant_id,recencia_dias,frecuencia_compras,monto_total_bs,ticket_promedio_bs,perfil_esperado
+1,2,33,4,368.16,92.04,Ocasional
+2,1,4,36,11012.89,305.91,VIP / Alto Valor
+3,2,105,5,364.3,72.86,Ocasional
+4,1,8,31,8752.64,282.34,VIP / Alto Valor
+5,2,113,6,646.54,107.76,Ocasional
+6,1,22,18,3677.69,204.32,Leal / Frecuente
+7,2,50,5,503.11,100.62,Ocasional
+8,1,26,7,777.91,111.13,Leal / Frecuente
+9,2,12,34,7648.93,224.97,VIP / Alto Valor
+10,1,15,32,6439.05,201.22,VIP / Alto Valor
+11,2,150,3,211.57,70.52,Inactivo / En Riesgo
+12,1,76,6,523.84,87.31,Ocasional
+13,2,8,39,8938.64,229.2,VIP / Alto Valor
+14,1,8,42,8281.15,197.17,VIP / Alto Valor
+15,2,45,11,1314.7,119.52,Leal / Frecuente
+16,1,22,17,3610.78,212.4,Leal / Frecuente
+17,2,107,3,354.22,118.07,Ocasional
+18,1,34,12,1588.72,132.39,Leal / Frecuente
+19,2,306,3,196.12,65.37,Inactivo / En Riesgo
+20,1,8,9,1787.55,198.62,Leal / Frecuente
+21,2,232,2,109.27,54.63,Inactivo / En Riesgo
+22,1,275,3,216.08,72.03,Inactivo / En Riesgo
+23,2,80,5,414.29,82.86,Ocasional
+24,1,18,32,7189.31,224.67,VIP / Alto Valor
+25,2,104,5,512.9,102.58,Ocasional
+26,1,165,3,253.64,84.55,Inactivo / En Riesgo
+27,2,44,3,379.41,126.47,Ocasional
+28,1,84,6,454.3,75.72,Ocasional
+29,2,34,14,1822.38,130.17,Leal / Frecuente
+30,1,31,2,262.71,131.35,Ocasional
+31,2,64,4,320.16,80.04,Ocasional
+32,1,34,6,1286.75,214.46,Leal / Frecuente
+33,2,197,3,310.01,103.34,Inactivo / En Riesgo
+34,1,43,4,583.0,145.75,Ocasional
+35,2,55,3,310.96,103.65,Ocasional
+36,1,38,6,1031.24,171.87,Leal / Frecuente
+37,2,44,4,596.34,149.09,Ocasional
+38,1,208,1,54.05,54.05,Inactivo / En Riesgo
+39,2,150,1,101.23,101.23,Inactivo / En Riesgo
+40,1,324,3,310.83,103.61,Inactivo / En Riesgo
+41,2,16,45,12306.0,273.47,VIP / Alto Valor
+42,1,43,12,2588.68,215.72,Leal / Frecuente
+43,2,323,3,294.87,98.29,Inactivo / En Riesgo
+44,1,81,4,437.72,109.43,Ocasional
+45,2,45,3,270.67,90.22,Ocasional
+46,1,42,14,1786.59,127.61,Leal / Frecuente
+47,2,9,17,2987.45,175.73,Leal / Frecuente
+48,1,7,11,1193.53,108.5,Leal / Frecuente
+49,2,36,9,1482.37,164.71,Leal / Frecuente
+50,1,103,6,675.24,112.54,Ocasional
+51,2,82,3,235.47,78.49,Ocasional
+52,1,75,5,535.0,107.0,Ocasional
+53,2,143,3,287.23,95.74,Inactivo / En Riesgo
+54,1,37,5,677.7,135.54,Ocasional
+55,2,157,1,63.41,63.41,Inactivo / En Riesgo
+56,1,47,5,432.57,86.51,Ocasional
+57,2,39,5,713.61,142.72,Ocasional
+58,1,155,1,95.65,95.65,Inactivo / En Riesgo
+59,2,31,2,306.75,153.38,Ocasional
+60,1,172,2,167.99,84.0,Inactivo / En Riesgo
+61,2,30,6,718.54,119.76,Leal / Frecuente
+62,1,13,23,7762.69,337.51,VIP / Alto Valor
+63,2,66,5,663.47,132.69,Ocasional
+64,1,101,5,419.66,83.93,Ocasional
+65,2,8,15,2824.33,188.29,Leal / Frecuente
+66,1,11,16,3016.39,188.52,VIP / Alto Valor
+67,2,97,3,225.36,75.12,Ocasional
+68,1,53,2,247.11,123.56,Ocasional
+69,2,60,5,403.95,80.79,Ocasional
+70,1,193,3,274.85,91.62,Inactivo / En Riesgo
+71,2,83,6,725.22,120.87,Ocasional
+72,1,21,9,1623.3,180.37,Leal / Frecuente
+73,2,21,12,1388.46,115.7,Leal / Frecuente
+74,1,88,4,614.45,153.61,Ocasional
+75,2,132,2,186.96,93.48,Inactivo / En Riesgo
+76,1,42,2,236.77,118.39,Ocasional
+77,2,46,4,597.11,149.28,Ocasional
+78,1,224,2,122.08,61.04,Inactivo / En Riesgo
+79,2,310,2,185.63,92.81,Inactivo / En Riesgo
+80,1,297,3,151.64,50.55,Inactivo / En Riesgo
+81,2,206,3,171.75,57.25,Inactivo / En Riesgo
+82,1,197,1,112.28,112.28,Inactivo / En Riesgo
+83,2,49,4,381.43,95.36,Ocasional
+84,1,26,9,1642.5,182.5,Leal / Frecuente
+85,2,259,2,135.16,67.58,Inactivo / En Riesgo
+86,1,143,1,94.4,94.4,Inactivo / En Riesgo
+87,2,141,1,73.35,73.35,Inactivo / En Riesgo
+88,1,9,20,6120.19,306.01,VIP / Alto Valor
+89,2,84,6,425.22,70.87,Ocasional
+90,1,5,32,5955.99,186.12,VIP / Alto Valor
+91,2,40,8,1212.6,151.57,Leal / Frecuente
+92,1,12,43,14560.87,338.62,VIP / Alto Valor
+93,2,140,2,129.41,64.7,Inactivo / En Riesgo
+94,1,11,11,2129.75,193.61,Leal / Frecuente
+95,2,234,3,307.39,102.46,Inactivo / En Riesgo
+96,1,190,1,118.33,118.33,Inactivo / En Riesgo
+97,2,355,2,103.47,51.73,Inactivo / En Riesgo
+98,1,72,5,711.01,142.2,Ocasional
+99,2,337,1,68.68,68.68,Inactivo / En Riesgo
+100,1,43,5,742.48,148.5,Ocasional
+101,2,186,1,107.16,107.16,Inactivo / En Riesgo
+102,1,69,3,270.19,90.06,Ocasional
+103,2,81,4,380.3,95.08,Ocasional
+104,1,9,26,7515.35,289.05,VIP / Alto Valor
+105,2,39,11,2339.79,212.71,Leal / Frecuente
+106,1,9,20,5574.01,278.7,VIP / Alto Valor
+107,2,139,1,91.76,91.76,Inactivo / En Riesgo
+108,1,25,12,2072.94,172.75,Leal / Frecuente
+109,2,79,6,522.64,87.11,Ocasional
+110,1,14,15,4025.8,268.39,VIP / Alto Valor
+111,2,305,3,347.46,115.82,Inactivo / En Riesgo
+112,1,55,4,435.27,108.82,Ocasional
+113,2,365,2,187.24,93.62,Inactivo / En Riesgo
+114,1,45,4,462.56,115.64,Ocasional
+115,2,71,5,663.74,132.75,Ocasional
+116,1,54,5,649.22,129.84,Ocasional
+117,2,16,15,2524.39,168.29,Leal / Frecuente
+118,1,5,10,1344.3,134.43,Leal / Frecuente
+119,2,42,15,2678.47,178.56,Leal / Frecuente
+120,1,86,3,348.02,116.01,Ocasional
+121,2,51,2,191.08,95.54,Ocasional
+122,1,109,4,313.62,78.41,Ocasional
+123,2,190,3,215.19,71.73,Inactivo / En Riesgo
+124,1,167,1,53.23,53.23,Inactivo / En Riesgo
+125,2,286,1,81.88,81.88,Inactivo / En Riesgo
+126,1,277,1,100.28,100.28,Inactivo / En Riesgo
+127,2,30,9,1059.38,117.71,Leal / Frecuente
+128,1,43,5,448.48,89.7,Ocasional
+129,2,308,3,247.56,82.52,Inactivo / En Riesgo
+130,1,45,5,410.0,82.0,Ocasional
+131,2,97,6,741.54,123.59,Ocasional
+132,1,358,2,185.77,92.89,Inactivo / En Riesgo
+133,2,94,5,723.76,144.75,Ocasional
+134,1,50,5,552.53,110.51,Ocasional
+135,2,111,4,555.69,138.92,Ocasional
+136,1,110,3,284.14,94.71,Ocasional
+137,2,10,22,4976.21,226.19,VIP / Alto Valor
+138,1,39,7,816.23,116.6,Leal / Frecuente
+139,2,14,17,2136.46,125.67,Leal / Frecuente
+140,1,26,14,2182.75,155.91,Leal / Frecuente
+141,2,14,27,9013.21,333.82,VIP / Alto Valor
+142,1,119,2,294.21,147.1,Ocasional
+143,2,78,5,352.65,70.53,Ocasional
+144,1,29,12,1975.04,164.59,Leal / Frecuente
+145,2,107,3,341.82,113.94,Ocasional
+146,1,36,6,879.98,146.66,Leal / Frecuente
+147,2,81,3,436.94,145.65,Ocasional
+148,1,289,3,155.66,51.89,Inactivo / En Riesgo
+149,2,41,16,1652.04,103.25,Leal / Frecuente
+150,1,47,5,431.78,86.36,Ocasional
+151,2,25,9,1391.08,154.56,Leal / Frecuente
+152,1,29,10,1902.41,190.24,Leal / Frecuente
+153,2,194,1,82.92,82.92,Inactivo / En Riesgo
+154,1,36,4,360.72,90.18,Ocasional
+155,2,2,39,7225.73,185.28,VIP / Alto Valor
+156,1,6,15,1774.29,118.29,Leal / Frecuente
+157,2,4,33,11256.92,341.12,VIP / Alto Valor
+158,1,62,4,340.4,85.1,Ocasional
+159,2,44,3,470.47,156.82,Ocasional
+160,1,1,44,10253.44,233.03,VIP / Alto Valor
+161,2,78,5,773.66,154.73,Ocasional
+162,1,42,17,3394.37,199.67,Leal / Frecuente
+163,2,24,16,2752.79,172.05,Leal / Frecuente
+164,1,19,40,7479.27,186.98,VIP / Alto Valor
+165,2,114,4,304.82,76.2,Ocasional
+166,1,31,5,720.05,144.01,Ocasional
+167,2,12,35,11604.87,331.57,VIP / Alto Valor
+168,1,49,5,429.26,85.85,Ocasional
+169,2,113,4,501.73,125.43,Ocasional
+170,1,328,2,165.08,82.54,Inactivo / En Riesgo
+171,2,281,2,145.12,72.56,Inactivo / En Riesgo
+172,1,10,10,2057.96,205.8,Leal / Frecuente
+173,2,34,15,2598.6,173.24,Leal / Frecuente
+174,1,6,13,2627.49,202.11,Leal / Frecuente
+175,2,18,11,2153.14,195.74,Leal / Frecuente
+176,1,43,17,3495.42,205.61,Leal / Frecuente
+177,2,96,3,233.12,77.71,Ocasional
+178,1,92,6,829.41,138.23,Ocasional
+179,2,112,5,551.68,110.34,Ocasional
+180,1,10,22,5472.46,248.75,VIP / Alto Valor
+181,2,42,11,1724.7,156.79,Leal / Frecuente
+182,1,84,6,598.63,99.77,Ocasional
+183,2,64,4,370.51,92.63,Ocasional
+184,1,7,25,5008.11,200.32,VIP / Alto Valor
+185,2,118,3,261.72,87.24,Ocasional
+186,1,65,6,947.37,157.9,Ocasional
+187,2,66,2,289.87,144.94,Ocasional
+188,1,28,8,1090.18,136.27,Leal / Frecuente
+189,2,46,4,296.39,74.1,Ocasional
+190,1,10,37,12598.32,340.5,VIP / Alto Valor
+191,2,92,2,297.09,148.54,Ocasional
+192,1,90,5,548.21,109.64,Ocasional
+193,2,8,10,2129.28,212.93,Leal / Frecuente
+194,1,38,5,571.29,114.26,Ocasional
+195,2,117,2,167.31,83.66,Ocasional
+196,1,207,1,119.57,119.57,Inactivo / En Riesgo
+197,2,14,34,9565.61,281.34,VIP / Alto Valor
+198,1,96,5,552.73,110.55,Ocasional
+199,2,42,12,1639.75,136.65,Leal / Frecuente
+200,1,108,2,310.57,155.28,Ocasional
+201,2,18,10,1792.51,179.25,Leal / Frecuente
+202,1,16,14,1526.11,109.01,Leal / Frecuente
+203,2,15,37,10395.07,280.95,VIP / Alto Valor
+204,1,19,10,1848.35,184.83,Leal / Frecuente
+205,2,88,2,263.73,131.87,Ocasional
+206,1,331,3,273.86,91.29,Inactivo / En Riesgo
+207,2,180,2,116.07,58.03,Inactivo / En Riesgo
+208,1,14,10,1991.96,199.2,Leal / Frecuente
+209,2,6,40,9291.76,232.29,VIP / Alto Valor
+210,1,102,4,438.1,109.53,Ocasional
+211,2,68,5,774.2,154.84,Ocasional
+212,1,93,5,386.2,77.24,Ocasional
+213,2,14,38,8922.2,234.79,VIP / Alto Valor
+214,1,10,9,1938.86,215.43,Leal / Frecuente
+215,2,277,3,349.67,116.56,Inactivo / En Riesgo
+216,1,302,2,180.67,90.33,Inactivo / En Riesgo
+217,2,52,5,583.53,116.71,Ocasional
+218,1,22,8,1757.07,219.63,Leal / Frecuente
+219,2,36,7,1094.81,156.4,Leal / Frecuente
+220,1,25,16,1800.83,112.55,Leal / Frecuente
+221,2,31,17,2710.76,159.46,Leal / Frecuente
+222,1,81,6,439.82,73.3,Ocasional
+223,2,9,25,4992.67,199.71,VIP / Alto Valor
+224,1,95,2,258.38,129.19,Ocasional
+225,2,82,2,173.76,86.88,Ocasional
+226,1,36,16,2448.72,153.04,Leal / Frecuente
+227,2,9,32,6472.71,202.27,VIP / Alto Valor
+228,1,36,7,724.25,103.46,Leal / Frecuente
+229,2,60,3,293.9,97.97,Ocasional
+230,1,14,17,3709.38,218.2,VIP / Alto Valor
+231,2,159,2,232.59,116.3,Inactivo / En Riesgo
+232,1,49,5,769.69,153.94,Ocasional
+233,2,22,12,2402.0,200.17,Leal / Frecuente
+234,1,192,2,177.18,88.59,Inactivo / En Riesgo
+235,2,43,14,2653.77,189.56,Leal / Frecuente
+236,1,3,23,7161.16,311.35,VIP / Alto Valor
+237,2,217,3,206.11,68.7,Inactivo / En Riesgo
+238,1,10,41,11470.96,279.78,VIP / Alto Valor
+239,2,255,1,81.26,81.26,Inactivo / En Riesgo
+240,1,72,6,831.95,138.66,Ocasional
+241,2,25,9,1959.24,217.69,Leal / Frecuente
+242,1,29,9,1824.49,202.72,Leal / Frecuente
+243,2,25,17,2664.87,156.76,Leal / Frecuente
+244,1,227,2,238.38,119.19,Inactivo / En Riesgo
+245,2,113,3,343.74,114.58,Ocasional
+246,1,17,45,12614.88,280.33,VIP / Alto Valor
+247,2,353,2,113.96,56.98,Inactivo / En Riesgo
+248,1,133,3,180.27,60.09,Inactivo / En Riesgo
+249,2,169,1,82.86,82.86,Inactivo / En Riesgo
+250,1,216,3,295.47,98.49,Inactivo / En Riesgo
+251,2,72,6,625.21,104.2,Ocasional
+252,1,36,14,1460.31,104.31,Leal / Frecuente
+253,2,10,22,6752.91,306.95,VIP / Alto Valor
+254,1,11,18,3168.9,176.05,Leal / Frecuente
+255,2,243,1,98.58,98.58,Inactivo / En Riesgo
+256,1,141,2,211.46,105.73,Inactivo / En Riesgo
+257,2,28,12,1409.62,117.47,Leal / Frecuente
+258,1,102,3,255.9,85.3,Ocasional
+259,2,13,34,10068.52,296.13,VIP / Alto Valor
+260,1,104,3,272.69,90.9,Ocasional
+261,2,88,4,520.06,130.01,Ocasional
+262,1,249,2,194.87,97.44,Inactivo / En Riesgo
+263,2,33,11,2403.7,218.52,Leal / Frecuente
+264,1,32,17,2210.2,130.01,Leal / Frecuente
+265,2,180,2,219.47,109.73,Inactivo / En Riesgo
+266,1,13,33,7953.76,241.02,VIP / Alto Valor
+267,2,23,6,1304.12,217.35,Leal / Frecuente
+268,1,65,2,241.87,120.94,Ocasional
+269,2,36,6,822.39,137.06,Ocasional
+270,1,361,2,208.6,104.3,Inactivo / En Riesgo
+271,2,27,9,1587.55,176.39,Leal / Frecuente
+272,1,116,3,379.63,126.54,Ocasional
+273,2,295,1,71.63,71.63,Inactivo / En Riesgo
+274,1,42,11,2066.71,187.88,Leal / Frecuente
+275,2,10,25,7676.79,307.07,VIP / Alto Valor
+276,1,13,18,2965.12,164.73,Leal / Frecuente
+277,2,265,3,341.83,113.94,Inactivo / En Riesgo
+278,1,195,2,235.43,117.72,Inactivo / En Riesgo
+279,2,26,18,2048.77,113.82,Leal / Frecuente
+280,1,166,1,110.21,110.21,Inactivo / En Riesgo
+281,2,80,6,617.52,102.92,Ocasional
+282,1,31,4,473.17,118.29,Ocasional
+283,2,116,4,490.44,122.61,Ocasional
+284,1,225,1,97.24,97.24,Inactivo / En Riesgo
+285,2,109,6,597.12,99.52,Ocasional
+286,1,112,2,254.37,127.19,Ocasional
+287,2,119,4,513.73,128.43,Ocasional
+288,1,2,45,8384.67,186.33,VIP / Alto Valor
+289,2,159,1,66.44,66.44,Inactivo / En Riesgo
+290,1,79,5,516.96,103.39,Ocasional
+291,2,308,3,238.02,79.34,Inactivo / En Riesgo
+292,1,49,5,644.71,128.94,Ocasional
+293,2,287,2,231.47,115.73,Inactivo / En Riesgo
+294,1,28,9,1378.85,153.21,Leal / Frecuente
+295,2,348,2,113.91,56.95,Inactivo / En Riesgo
+296,1,99,4,301.8,75.45,Ocasional
+297,2,12,13,1443.01,111.0,Leal / Frecuente
+298,1,45,15,3247.97,216.53,Leal / Frecuente
+299,2,11,22,7658.19,348.1,VIP / Alto Valor
+300,1,56,2,289.37,144.69,Ocasional
+301,2,105,3,429.52,143.17,Ocasional
+302,1,14,18,3745.15,208.06,Leal / Frecuente
+303,2,5,19,5164.9,271.84,VIP / Alto Valor
+304,1,44,2,163.72,81.86,Ocasional
+305,2,20,15,2082.79,138.85,Leal / Frecuente
+306,1,8,8,1512.05,189.01,Leal / Frecuente
+307,2,38,5,551.72,110.34,Ocasional
+308,1,42,7,1079.68,154.24,Leal / Frecuente
+309,2,44,6,1123.61,187.27,Leal / Frecuente
+310,1,298,3,213.34,71.11,Inactivo / En Riesgo
+311,2,33,2,319.75,159.88,Ocasional
+312,1,239,3,172.67,57.56,Inactivo / En Riesgo
+313,2,86,2,301.87,150.94,Ocasional
+314,1,14,7,806.0,115.14,Leal / Frecuente
+315,2,104,6,804.56,134.09,Ocasional
+316,1,43,14,1895.43,135.39,Leal / Frecuente
+317,2,85,2,282.76,141.38,Ocasional
+318,1,18,38,12431.08,327.13,VIP / Alto Valor
+319,2,19,12,1688.06,140.67,Leal / Frecuente
+320,1,83,2,196.26,98.13,Ocasional
+321,2,21,11,2358.74,214.43,Leal / Frecuente
+322,1,90,2,156.42,78.21,Ocasional
+323,2,14,18,5518.44,306.58,VIP / Alto Valor
+324,1,13,14,1500.77,107.2,Leal / Frecuente
+325,2,273,2,193.8,96.9,Inactivo / En Riesgo
+326,1,32,17,1804.95,106.17,Leal / Frecuente
+327,2,24,11,1236.75,112.43,Leal / Frecuente
+328,1,49,5,450.91,90.18,Ocasional
+329,2,18,26,5187.79,199.53,VIP / Alto Valor
+330,1,19,18,2726.88,151.49,Leal / Frecuente
+331,2,109,6,784.49,130.75,Ocasional
+332,1,107,4,290.42,72.61,Ocasional
+333,2,24,11,1563.35,142.12,Leal / Frecuente
+334,1,14,15,2683.22,178.88,Leal / Frecuente
+335,2,1,17,5216.26,306.84,VIP / Alto Valor
+336,1,31,13,1831.8,140.91,Leal / Frecuente
+337,2,25,18,3833.44,212.97,Leal / Frecuente
+338,1,36,3,252.5,84.17,Ocasional
+339,2,116,2,188.98,94.49,Ocasional
+340,1,92,6,658.7,109.78,Ocasional
+341,2,37,7,989.95,141.42,Leal / Frecuente
+342,1,19,30,8087.36,269.58,VIP / Alto Valor
+343,2,19,12,2617.6,218.13,Leal / Frecuente
+344,1,7,24,8176.92,340.7,VIP / Alto Valor
+345,2,62,4,398.12,99.53,Ocasional
+346,1,14,20,4039.23,201.96,VIP / Alto Valor
+347,2,59,6,721.71,120.29,Ocasional
+348,1,75,2,211.47,105.73,Ocasional
+349,2,85,2,222.76,111.38,Ocasional
+350,1,11,33,8348.28,252.98,VIP / Alto Valor
+351,2,45,12,1616.9,134.74,Leal / Frecuente
+352,1,25,8,1569.27,196.16,Leal / Frecuente
+353,2,118,4,311.73,77.93,Ocasional
+354,1,192,2,182.44,91.22,Inactivo / En Riesgo
+355,2,80,4,548.49,137.12,Ocasional
+356,1,15,7,1128.81,161.26,Leal / Frecuente
+357,2,17,21,7014.14,334.01,VIP / Alto Valor
+358,1,14,9,1011.03,112.34,Leal / Frecuente
+359,2,16,15,1775.17,118.34,Leal / Frecuente
+360,1,39,3,466.85,155.62,Ocasional
+361,2,89,6,830.33,138.39,Ocasional
+362,1,41,16,2819.77,176.24,Leal / Frecuente
+363,2,110,4,334.34,83.58,Ocasional
+364,1,15,35,8101.78,231.48,VIP / Alto Valor
+365,2,8,11,1769.68,160.88,Leal / Frecuente
+366,1,33,6,640.96,106.83,Leal / Frecuente
+367,2,149,3,331.49,110.5,Inactivo / En Riesgo
+368,1,287,3,256.48,85.49,Inactivo / En Riesgo
+369,2,100,2,220.95,110.47,Ocasional
+370,1,296,1,72.51,72.51,Inactivo / En Riesgo
+371,2,49,2,221.09,110.55,Ocasional
+372,1,344,2,237.53,118.77,Inactivo / En Riesgo
+373,2,6,16,3553.86,222.12,VIP / Alto Valor
+374,1,33,14,2278.22,162.73,Leal / Frecuente
+375,2,28,10,1464.9,146.49,Leal / Frecuente
+376,1,116,6,448.28,74.71,Ocasional
+377,2,72,2,199.34,99.67,Ocasional
+378,1,79,4,370.72,92.68,Ocasional
+379,2,362,3,333.39,111.13,Inactivo / En Riesgo
+380,1,42,16,1871.54,116.97,Leal / Frecuente
+381,2,30,8,1371.24,171.41,Leal / Frecuente
+382,1,209,3,229.1,76.37,Inactivo / En Riesgo
+383,2,46,6,470.46,78.41,Ocasional
+384,1,95,4,286.56,71.64,Ocasional
+385,2,18,11,2350.92,213.72,Leal / Frecuente
+386,1,58,3,251.84,83.95,Ocasional
+387,2,11,14,2695.07,192.51,Leal / Frecuente
+388,1,356,3,157.93,52.64,Inactivo / En Riesgo
+389,2,44,8,1373.36,171.67,Leal / Frecuente
+390,1,16,17,3273.04,192.53,Leal / Frecuente
+391,2,172,3,241.91,80.64,Inactivo / En Riesgo
+392,1,20,13,2252.53,173.27,Leal / Frecuente
+393,2,87,3,354.18,118.06,Ocasional
+394,1,35,9,1297.27,144.14,Leal / Frecuente
+395,2,242,2,207.72,103.86,Inactivo / En Riesgo
+396,1,94,6,646.08,107.68,Ocasional
+397,2,17,18,3106.07,172.56,Leal / Frecuente
+398,1,143,3,250.92,83.64,Inactivo / En Riesgo
+399,2,11,17,3425.62,201.51,Leal / Frecuente
+400,1,202,1,103.42,103.42,Inactivo / En Riesgo
+401,2,37,8,1597.8,199.72,Leal / Frecuente
+402,1,8,41,10524.36,256.69,VIP / Alto Valor
+403,2,6,12,1276.69,106.39,Leal / Frecuente
+404,1,60,5,797.54,159.51,Ocasional
+405,2,6,11,2328.69,211.7,Leal / Frecuente
+406,1,296,2,210.79,105.39,Inactivo / En Riesgo
+407,2,10,44,14126.62,321.06,VIP / Alto Valor
+408,1,47,5,551.87,110.37,Ocasional
+409,2,3,15,3352.61,223.51,VIP / Alto Valor
+410,1,270,3,277.86,92.62,Inactivo / En Riesgo
+411,2,23,9,1225.24,136.14,Leal / Frecuente
+412,1,14,35,11023.7,314.96,VIP / Alto Valor
+413,2,44,5,618.53,123.71,Ocasional
+414,1,17,33,7297.27,221.13,VIP / Alto Valor
+415,2,14,15,4267.76,284.52,VIP / Alto Valor
+416,1,31,8,1437.8,179.72,Leal / Frecuente
+417,2,12,17,5815.34,342.08,VIP / Alto Valor
+418,1,94,6,430.98,71.83,Ocasional
+419,2,141,3,231.25,77.08,Inactivo / En Riesgo
+420,1,6,11,2140.85,194.62,Leal / Frecuente
+421,2,45,7,1348.06,192.58,Leal / Frecuente
+422,1,72,3,221.97,73.99,Ocasional
+423,2,112,3,434.2,144.73,Ocasional
+424,1,119,5,634.28,126.86,Ocasional
+425,2,146,3,313.0,104.33,Inactivo / En Riesgo
+426,1,67,3,221.83,73.94,Ocasional
+427,2,7,11,2332.05,212.0,Leal / Frecuente
+428,1,99,5,463.99,92.8,Ocasional
+429,2,54,4,408.51,102.13,Ocasional
+430,1,113,4,378.36,94.59,Ocasional
+431,2,85,5,684.49,136.9,Ocasional
+432,1,228,2,236.32,118.16,Inactivo / En Riesgo
+433,2,93,4,612.75,153.19,Ocasional
+434,1,40,5,385.52,77.1,Ocasional
+435,2,53,6,578.63,96.44,Ocasional
+436,1,11,36,8289.32,230.26,VIP / Alto Valor
+437,2,32,8,1462.17,182.77,Leal / Frecuente
+438,1,7,17,3474.88,204.4,Leal / Frecuente
+439,2,32,10,1767.36,176.74,Leal / Frecuente
+440,1,37,2,260.81,130.41,Ocasional
+441,2,37,18,3419.78,189.99,Leal / Frecuente
+442,1,6,8,1614.72,201.84,Leal / Frecuente
+443,2,86,2,162.72,81.36,Ocasional
+444,1,28,11,1605.37,145.94,Leal / Frecuente
+445,2,107,3,393.35,131.12,Ocasional
+446,1,225,2,206.83,103.42,Inactivo / En Riesgo
+447,2,97,4,423.29,105.82,Ocasional
+448,1,61,2,144.66,72.33,Ocasional
+449,2,38,12,2515.5,209.62,Leal / Frecuente
+450,1,9,37,9467.06,255.87,VIP / Alto Valor
+451,2,203,3,342.46,114.15,Inactivo / En Riesgo
+452,1,45,3,440.26,146.75,Ocasional
+453,2,86,2,285.89,142.94,Ocasional
+454,1,211,3,222.96,74.32,Inactivo / En Riesgo
+455,2,18,24,7956.63,331.53,VIP / Alto Valor
+456,1,312,3,344.74,114.91,Inactivo / En Riesgo
+457,2,76,6,541.09,90.18,Ocasional
+458,1,332,1,66.57,66.57,Inactivo / En Riesgo
+459,2,76,6,729.03,121.5,Ocasional
+460,1,100,3,375.23,125.08,Ocasional
+461,2,10,27,9448.14,349.93,VIP / Alto Valor
+462,1,97,5,696.12,139.22,Ocasional
+463,2,148,1,118.07,118.07,Inactivo / En Riesgo
+464,1,87,5,656.05,131.21,Ocasional
+465,2,40,16,2728.55,170.53,Leal / Frecuente
+466,1,46,5,576.29,115.26,Ocasional
+467,2,342,1,86.27,86.27,Inactivo / En Riesgo
+468,1,15,11,2333.85,212.17,Leal / Frecuente
+469,2,38,10,2015.12,201.51,Leal / Frecuente
+470,1,45,14,1861.08,132.93,Leal / Frecuente
+471,2,108,6,470.45,78.41,Ocasional
+472,1,105,6,503.26,83.88,Ocasional
+473,2,107,4,583.31,145.83,Ocasional
+474,1,33,2,148.18,74.09,Ocasional
+475,2,103,4,514.41,128.6,Ocasional
+476,1,83,6,765.06,127.51,Ocasional
+477,2,110,6,576.42,96.07,Ocasional
+478,1,253,1,106.33,106.33,Inactivo / En Riesgo
+479,2,68,5,382.84,76.57,Ocasional
+480,1,15,28,7345.04,262.32,VIP / Alto Valor
+481,2,43,8,1100.08,137.51,Leal / Frecuente
+482,1,74,5,408.84,81.77,Ocasional
+483,2,40,7,968.06,138.29,Leal / Frecuente
+484,1,64,5,461.56,92.31,Ocasional
+485,2,10,45,11038.75,245.31,VIP / Alto Valor
+486,1,61,3,429.64,143.21,Ocasional
+487,2,314,2,126.58,63.29,Inactivo / En Riesgo
+488,1,37,13,2078.07,159.85,Leal / Frecuente
+489,2,6,7,1494.0,213.43,Leal / Frecuente
+490,1,60,3,367.5,122.5,Ocasional
+491,2,10,30,8447.35,281.58,VIP / Alto Valor
+492,1,302,2,140.0,70.0,Inactivo / En Riesgo
+493,2,4,28,5677.53,202.77,VIP / Alto Valor
+494,1,28,18,2671.03,148.39,Leal / Frecuente
+495,2,2,33,9091.79,275.51,VIP / Alto Valor
+496,1,23,7,1024.53,146.36,Leal / Frecuente
+497,2,100,4,577.11,144.28,Ocasional
+498,1,108,2,163.16,81.58,Ocasional
+499,2,12,40,13910.16,347.75,VIP / Alto Valor
+500,1,76,3,263.75,87.92,Ocasional

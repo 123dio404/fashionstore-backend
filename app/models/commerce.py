@@ -44,6 +44,9 @@ class Sale(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column("id_empresa", ForeignKey("empresa.id", ondelete="CASCADE"), nullable=True, index=True)
+    offline_uuid: Mapped[str | None] = mapped_column("uuid_offline", String(36), unique=True, nullable=True, index=True)
+    sync_status: Mapped[str] = mapped_column("estado_sincronizacion", String(30), default="CONFIRMADO", nullable=False)
     client_id: Mapped[int] = mapped_column("id_cliente", ForeignKey("usuario.id", ondelete="RESTRICT"))
     user_id: Mapped[int | None] = mapped_column("id_usuario", ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
     branch_id: Mapped[int] = mapped_column("id_sucursal", ForeignKey("sucursal.id", ondelete="RESTRICT"))
@@ -86,6 +89,9 @@ class Reservation(Base):
     __tablename__ = "reserva"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column("id_empresa", ForeignKey("empresa.id", ondelete="CASCADE"), nullable=True, index=True)
+    offline_uuid: Mapped[str | None] = mapped_column("uuid_offline", String(36), unique=True, nullable=True, index=True)
+    sync_status: Mapped[str] = mapped_column("estado_sincronizacion", String(30), default="CONFIRMADO", nullable=False)
     client_id: Mapped[int] = mapped_column("id_cliente", ForeignKey("usuario.id", ondelete="RESTRICT"), index=True)
     branch_id: Mapped[int] = mapped_column("id_sucursal", ForeignKey("sucursal.id", ondelete="RESTRICT"))
     reservation_date: Mapped[date] = mapped_column("fecha_reserva", nullable=False, index=True)
