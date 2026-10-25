@@ -53,6 +53,8 @@ class CartItemResponse(BaseModel):
     stock_id: int
     quantity: int
     price: Decimal
+    is_wholesale_applied: bool = False
+    wholesale_min_qty: int = 3
     variant_id: int
     product_id: int
     product_name: str
@@ -136,8 +138,20 @@ class SaleResponse(ORMModel):
     sale_date: datetime
     total: Decimal
     sale_type: SaleType
+    delivery_status: str = "PAGADO"
+    customer_notes: str | None = None
+    delivered_at: datetime | None = None
     items: list[SaleItemResponse] = []
     payments: list[SalePaymentResponse] = []
+
+
+class DeliveryStatusUpdate(BaseModel):
+    delivery_status: str = Field(description="Estado de entrega: POR_DESPACHAR, ENVIADO, ENTREGADO_CONFORME")
+    notes: str | None = Field(default=None, max_length=255)
+
+
+class CustomerDeliveryConfirmation(BaseModel):
+    notes: str | None = Field(default=None, max_length=255, description="Confirmación de conformidad del cliente al recibir la prenda")
 
 
 class ReceiptResponse(BaseModel):

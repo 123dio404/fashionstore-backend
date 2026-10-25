@@ -73,10 +73,29 @@ def process_garment_exchange(
             detail=f"No hay stock suficiente de la nueva prenda solicitada (Disponibles: {available}, Requeridos: {data.quantity})",
         )
 
-    # Precios
+    # Precios y diferencias
     returned_price = orig_item.unit_price
     new_price = new_stock.variant.price if new_stock.variant else Decimal("0.00")
     price_diff = (new_price - returned_price) * Decimal(data.quantity)
+
+    # Políticas financieras y notificaciones según directriz de clase
+    push_sent = True
+    push_text = None
+    diff_status = "PAGADO"
+    refund_amount = Decimal("0.00")
+    refund_status = None
+
+    if price_diff > 0:
+        diff_status = "PENDIENTE_PAGO"
+        push_text = f"Estimado cliente, su cambio de prenda tiene una diferencia pendiente de Bs. {price_diff}. Ingrese a la app para cancelarla mediante pasarela y autorizar el despacho."
+    elif price_diff < 0:
+        diff_status = "A_FAVOR_CLIENTE"
+        # Política de reembolso del audio: retención del 10% por gastos administrativos y programación a fin de mes
+        raw_credit = abs(price_diff)
+        admin_fee = (raw_credit * Decimal("0.10")).quantize(Decimal("0.01"))
+        refund_amount = (raw_credit - admin_fee).quantize(Decimal("0.01"))
+        refund_status = "PROGRAMADO_FIN_DE_MES"
+        push_text = f"Saldo a favor aprobado: Bs. {refund_amount} (descontando 10% de retención administrativa Bs. {admin_fee}). Programado para liquidación en el arqueo y cierre mensual de caja."
 
     # Ajuste de inventario atómico
     returned_stock.physical_stock += data.quantity
@@ -107,6 +126,11 @@ def process_garment_exchange(
         new_stock_id=new_stock.id,
         quantity=data.quantity,
         price_difference=price_diff,
+        difference_payment_status=diff_status,
+        push_notification_sent=push_sent,
+        push_notification_text=push_text,
+        refund_amount=refund_amount,
+        refund_status=refund_status,
         reason=data.reason,
         user_id=cashier_id,
         created_at=now,
@@ -124,6 +148,11 @@ def process_garment_exchange(
         new_stock_id=exchange.new_stock_id,
         quantity=exchange.quantity,
         price_difference=exchange.price_difference,
+        difference_payment_status=exchange.difference_payment_status,
+        push_notification_sent=exchange.push_notification_sent,
+        push_notification_text=exchange.push_notification_text,
+        refund_amount=exchange.refund_amount,
+        refund_status=exchange.refund_status,
         reason=exchange.reason,
         created_at=exchange.created_at,
         receipt_number=f"CHG-{exchange.id:08d}",

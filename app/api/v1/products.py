@@ -7,7 +7,7 @@ from app.models.inventory import Stock
 from app.models.product import Category, Color, Product, ProductVariant, Season, Size
 from app.models.user import Role
 from app.schemas.inventory import AvailabilityResponse
-from app.schemas.product import (CategoryResponse, ColorResponse, ParameterCreate, ParameterUpdate, ProductCreate, ProductResponse, ProductUpdate, SeasonResponse, SizeResponse, VariantCreate, VariantResponse)
+from app.schemas.product import (CategoryResponse, ClearanceBatchRequest, ColorResponse, ParameterCreate, ParameterUpdate, ProductCreate, ProductResponse, ProductUpdate, SeasonResponse, SizeResponse, VariantCreate, VariantResponse)
 from app.services.product_service import create_product, update_product
 router = APIRouter(tags=['products'])
 editor = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO))
@@ -119,8 +119,50 @@ def delete_color(item_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 @router.get('/products', response_model=list[ProductResponse])
-def list_products(db: Session = Depends(get_db)):
-    return list(db.scalars(select(Product).options(selectinload(Product.variants)).order_by(Product.name)).all())
+def list_products(
+    category_id: int | None = None,
+    season_id: int | None = None,
+    material: str | None = None,
+    is_clearance: bool | None = None,
+    db: Session = Depends(get_db),
+):
+    """Lista catálogo de prendas con soporte para filtros por material textil (alergias/temporada) y liquidación."""
+    query = select(Product).options(selectinload(Product.variants))
+    if category_id is not None:
+        query = query.where(Product.category_id == category_id)
+    if season_id is not None:
+        query = query.where(Product.season_id == season_id)
+    if material is not None:
+        query = query.where(Product.material.ilike(f"%{material.strip()}%"))
+    if is_clearance is not None:
+        query = query.where(Product.is_clearance == is_clearance)
+    return list(db.scalars(query.order_by(Product.name)).all())
+
+@router.post('/products/clearance/batch', status_code=200, dependencies=[editor])
+def apply_clearance_batch(data: ClearanceBatchRequest, db: Session = Depends(get_db)):
+    """
+    Aplica liquidación de fin de temporada masiva (ej. 40% a 60% de descuento) a todas
+    las prendas de una temporada pasada para recuperar capital sin tocar las prendas de nueva temporada.
+    """
+    query = select(Product)
+    if data.season_id is not None:
+        query = query.where(Product.season_id == data.season_id)
+    if data.category_id is not None:
+        query = query.where(Product.category_id == data.category_id)
+    products = db.scalars(query).all()
+    if not products:
+        raise HTTPException(404, "No se encontraron prendas que coincidan con los criterios de temporada/categoría")
+    count = 0
+    for p in products:
+        p.is_clearance = data.is_clearance
+        p.discount_percentage = data.discount_percentage
+        count += 1
+    db.commit()
+    return {
+        "message": f"Se aplicó liquidación del {data.discount_percentage}% a {count} prendas.",
+        "affected_products": count,
+        "discount_percentage": data.discount_percentage,
+    }
 @router.post('/products', response_model=ProductResponse, status_code=201, dependencies=[editor])
 def add_product(data: ProductCreate, db: Session = Depends(get_db)): return create_product(db,data)
 @router.get('/products/{product_id}', response_model=ProductResponse)

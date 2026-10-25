@@ -57,6 +57,29 @@ def _stock(db: Session, stock_id: int) -> Stock:
     return stock
 
 
+def calculate_item_unit_price(product, quantity: int) -> tuple[Decimal, bool]:
+    """
+    Calcula el precio unitario considerando:
+    1. Liquidación de fin de temporada (is_clearance) con discount_percentage (ej. 40% o 60%).
+    2. Precio al por mayor si quantity >= product.wholesale_min_quantity y wholesale_price está definido.
+    3. Precio unitario regular por menor (product.price).
+    Retorna: (precio_final, es_precio_mayorista)
+    """
+    base_price = product.price
+    # 1. Liquidación fin de temporada (recuperación de capital según audio)
+    if getattr(product, "is_clearance", False) and getattr(product, "discount_percentage", Decimal("0.00")) > Decimal("0.00"):
+        factor = Decimal("1.00") - (Decimal(str(product.discount_percentage)) / Decimal("100.00"))
+        base_price = (base_price * factor).quantize(Decimal("0.01"))
+
+    # 2. Precio al por mayor por volumen automático (ej. a partir de 3 prendas)
+    wholesale_price = getattr(product, "wholesale_price", None)
+    min_qty = getattr(product, "wholesale_min_quantity", 3) or 3
+    if wholesale_price is not None and quantity >= min_qty:
+        return (wholesale_price, True)
+
+    return (base_price, False)
+
+
 def get_or_create_cart(db: Session, user_id: int) -> Cart:
     cart = db.scalar(
         select(Cart)
@@ -79,6 +102,10 @@ def get_cart(db: Session, user_id: int) -> CartResponse:
     for ci in cart.items:
         variant = ci.stock.variant
         product = variant.product
+        # Recalcular precio unitario automáticamente según volumen acumulado
+        computed_price, is_ws = calculate_item_unit_price(product, ci.quantity)
+        if ci.price != computed_price:
+            ci.price = computed_price
         total += ci.price * ci.quantity
         items.append(
             CartItemResponse(
@@ -86,6 +113,8 @@ def get_cart(db: Session, user_id: int) -> CartResponse:
                 stock_id=ci.stock_id,
                 quantity=ci.quantity,
                 price=ci.price,
+                is_wholesale_applied=is_ws,
+                wholesale_min_qty=getattr(product, "wholesale_min_quantity", 3) or 3,
                 variant_id=variant.id,
                 product_id=product.id,
                 product_name=product.name,
@@ -93,6 +122,7 @@ def get_cart(db: Session, user_id: int) -> CartResponse:
                 color=variant.color.name if variant.color else None,
             )
         )
+    db.commit()
     return CartResponse(id=cart.id, status=cart.status, items=items, total=total)
 
 
@@ -106,11 +136,15 @@ def add_to_cart(db: Session, user_id: int, data: CartItemRequest) -> CartRespons
     quantity = data.quantity + (existing.quantity if existing else 0)
     if quantity > available:
         raise HTTPException(409, "Requested quantity exceeds available stock")
+    
+    product = stock.variant.product
+    unit_price, _ = calculate_item_unit_price(product, quantity)
     if existing:
         existing.quantity = quantity
+        existing.price = unit_price
     else:
         cart.items.append(
-            CartItem(stock_id=data.stock_id, quantity=data.quantity, price=stock.variant.product.price)
+            CartItem(stock_id=data.stock_id, quantity=data.quantity, price=unit_price)
         )
     db.commit()
     return get_cart(db, user_id)
@@ -124,6 +158,9 @@ def update_cart_item(db: Session, user_id: int, item_id: int, quantity: int) -> 
     if quantity > (item.stock.physical_stock - item.stock.reserved_stock):
         raise HTTPException(409, "Requested quantity exceeds available stock")
     item.quantity = quantity
+    product = item.stock.variant.product
+    unit_price, _ = calculate_item_unit_price(product, quantity)
+    item.price = unit_price
     db.commit()
     return get_cart(db, user_id)
 
@@ -351,7 +388,7 @@ def sale_items(db: Session, sale: Sale) -> list[SaleItemResponse]:
 
 
 def sale_response(db: Session, sale: Sale) -> SaleResponse:
-    """Venta lista para el cliente: líneas legibles y pagos."""
+    """Venta lista para el cliente: líneas legibles, pagos y estado de despacho."""
     return SaleResponse(
         id=sale.id,
         client_id=sale.client_id,
@@ -360,6 +397,9 @@ def sale_response(db: Session, sale: Sale) -> SaleResponse:
         sale_date=sale.sale_date,
         total=sale.total,
         sale_type=sale.sale_type,
+        delivery_status=getattr(sale, "delivery_status", "PAGADO") or "PAGADO",
+        customer_notes=getattr(sale, "customer_notes", None),
+        delivered_at=getattr(sale, "delivered_at", None),
         items=sale_items(db, sale),
         payments=[SalePaymentResponse.model_validate(p) for p in sale.payments],
     )
@@ -381,7 +421,8 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
             raise HTTPException(422, f"Stock {inp.stock_id} does not belong to the sale branch")
         if inp.quantity > (stock.physical_stock - stock.reserved_stock):
             raise HTTPException(409, f"Insufficient available stock for {inp.stock_id}")
-        unit_price = stock.variant.product.price
+        product = stock.variant.product
+        unit_price, _ = calculate_item_unit_price(product, inp.quantity)
         total += unit_price * inp.quantity
         entries.append((stock, inp.quantity, unit_price))
     if total <= 0:
@@ -686,6 +727,45 @@ def convert_reservation_to_sale(
         ],
     )
     db.add(sale)
+    db.commit()
+    db.refresh(sale)
+    return sale
+
+
+def update_delivery_status(db: Session, sale_id: int, delivery_status: str, notes: str | None = None) -> Sale:
+    """
+    Actualiza el estado de logística/entrega de la venta (RN audio: Pagado -> Por despachar -> Enviado -> Entregado).
+    """
+    valid_statuses = {"PAGADO", "POR_DESPACHAR", "ENVIADO", "ENTREGADO_CONFORME"}
+    status_upper = delivery_status.upper().strip()
+    if status_upper not in valid_statuses:
+        raise HTTPException(400, f"Estado de entrega inválido. Valores permitidos: {', '.join(valid_statuses)}")
+    sale = db.get(Sale, sale_id)
+    if not sale:
+        raise HTTPException(404, "Venta no encontrada")
+    sale.delivery_status = status_upper
+    if notes:
+        sale.customer_notes = notes
+    if status_upper == "ENTREGADO_CONFORME" and not sale.delivered_at:
+        sale.delivered_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(sale)
+    return sale
+
+
+def confirm_customer_delivery(db: Session, sale_id: int, client_id: int, notes: str | None = None) -> Sale:
+    """
+    Permite al cliente confirmar en la app o web la recepción conforme de la prenda entregada.
+    """
+    sale = db.get(Sale, sale_id)
+    if not sale:
+        raise HTTPException(404, "Venta no encontrada")
+    if sale.client_id != client_id:
+        raise HTTPException(403, "No tiene permisos para confirmar la entrega de una compra de otro cliente")
+    sale.delivery_status = "ENTREGADO_CONFORME"
+    sale.delivered_at = datetime.now(timezone.utc)
+    if notes:
+        sale.customer_notes = f"Conformidad del cliente: {notes}"
     db.commit()
     db.refresh(sale)
     return sale
