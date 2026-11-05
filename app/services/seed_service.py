@@ -1,11 +1,11 @@
 """Cuentas de prueba de los actores del dominio (siembra de demo).
 
 Los 5 actores (roles) del sistema y sus cuentas genéricas usan la contraseña
-`admin123` y se (re)crean al arrancar la API cuando `SEED_DEMO_USERS=true`
+`Admin123` y se (re)crean al arrancar la API cuando `SEED_DEMO_USERS=true`
 (por defecto). Para producción real, desactivar con `SEED_DEMO_USERS=false`.
 
 La siembra es idempotente: si una cuenta ya existe, restablece su contraseña a
-`admin123` y garantiza que tenga el rol correcto.
+`Admin123` y garantiza que tenga el rol correcto.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from app.models.product import Category, Color, Product, ProductVariant, Season,
 from app.models.user import Role, User
 from app.services.auth_service import get_role, normalize_email
 
-DEMO_PASSWORD = "admin123"
+DEMO_PASSWORD = "Admin123"
 
 # (rol, email genérico, nombre completo)
 DEMO_ACTORS: list[tuple[Role, str, str]] = [

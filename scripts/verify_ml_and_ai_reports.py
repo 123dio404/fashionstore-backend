@@ -18,11 +18,11 @@ def run_tests():
     print(" INICIANDO VERIFICACIÓN DE MACHINE LEARNING Y REPORTES IA (PARCIAL 2)")
     print("=" * 70)
 
-    # Tokens para Tenant 1 (Plan Básico) y Tenant 2 (Plan Profesional)
-    token_t1 = login("admin@urbanstyle.com", "admin123")
+    # Tokens para Tenant 1 (Plan Básico) y Tenant 3 (Plan Empresarial)
+    token_t1 = login("admin@urbanstyle.com", "Admin123")
     headers_t1 = {"Authorization": f"Bearer {token_t1}"}
 
-    token_t2 = login("admin@elegance.com", "admin123")
+    token_t2 = login("admin@elegance.com", "Admin123")
     headers_t2 = {"Authorization": f"Bearer {token_t2}"}
 
     # ─────────────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ Actores (roles) del dominio Fashionstore:
   - Cliente
   - Proveedor
 
-Todas las cuentas usan la contraseña de prueba `admin123`.
+Todas las cuentas usan la contraseña de prueba `Admin123`.
 
 Este script es un wrapper de `app.services.seed_service.ensure_demo_users`, que
 también se ejecuta automáticamente al arrancar la API (si SEED_DEMO_USERS=true).
