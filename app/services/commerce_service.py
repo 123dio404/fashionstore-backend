@@ -406,13 +406,12 @@ def sale_response(db: Session, sale: Sale) -> SaleResponse:
 
 
 def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
-    if db.get(Branch, data.branch_id) is None:
+    branch = db.get(Branch, data.branch_id)
+    if branch is None:
         raise HTTPException(404, "Branch not found")
     client = db.get(User, data.client_id)
     if client is None:
         raise HTTPException(404, "Client not found")
-    if client.role != Role.CLIENTE:
-        raise HTTPException(422, "POS sales require a client user")
     total = Decimal("0")
     entries = []
     for inp in data.items:
@@ -430,7 +429,7 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
     requested_status = data.payment_status or (
         PaymentStatus.COMPLETADO if data.paid else PaymentStatus.PENDIENTE
     )
-    sale = Sale(client_id=data.client_id, user_id=user_id, branch_id=data.branch_id, total=total, sale_type="pos")
+    sale = Sale(tenant_id=branch.tenant_id, client_id=data.client_id, user_id=user_id, branch_id=data.branch_id, total=total, sale_type="pos")
     db.add(sale)
     db.flush()
     provider_name = (data.payment_provider or settings.payment_provider).casefold()
