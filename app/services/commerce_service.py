@@ -176,7 +176,8 @@ def remove_cart_item(db: Session, user_id: int, item_id: int) -> CartResponse:
 
 
 def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
-    if db.get(Branch, data.branch_id) is None:
+    branch = db.get(Branch, data.branch_id)
+    if branch is None:
         raise HTTPException(404, "Branch not found")
     cart = db.scalar(
         select(Cart).where(Cart.user_id == user_id, Cart.status == "activo").with_for_update()
@@ -191,7 +192,7 @@ def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
             raise HTTPException(409, f"Insufficient stock for {ci.stock_id}")
         locked_items.append((ci, stock))
         total += ci.price * ci.quantity
-    sale = Sale(client_id=user_id, user_id=user_id, branch_id=data.branch_id, total=total, sale_type="digital")
+    sale = Sale(tenant_id=branch.tenant_id, client_id=user_id, user_id=user_id, branch_id=data.branch_id, total=total, sale_type="digital")
     db.add(sale)
     db.flush()
     provider = get_payment_provider(data.payment_provider)
@@ -356,10 +357,12 @@ def sale_lines(db: Session, sale_id: int) -> list[dict]:
     return lines
 
 
-def list_sales(db: Session, client_id: int | None = None) -> list[SaleResponse]:
+def list_sales(db: Session, client_id: int | None = None, tenant_id: int | None = None) -> list[SaleResponse]:
     q = select(Sale).order_by(Sale.sale_date.desc(), Sale.id)
     if client_id is not None:
         q = q.where(Sale.client_id == client_id)
+    if tenant_id is not None:
+        q = q.where(Sale.tenant_id == tenant_id)
     return [sale_response(db, sale) for sale in db.scalars(q).all()]
 
 
@@ -389,6 +392,9 @@ def sale_items(db: Session, sale: Sale) -> list[SaleItemResponse]:
 
 def sale_response(db: Session, sale: Sale) -> SaleResponse:
     """Venta lista para el cliente: líneas legibles, pagos y estado de despacho."""
+    st = sale.sale_type or "pos"
+    if st not in ("digital", "pos"):
+        st = "digital" if "digital" in str(st).lower() else "pos"
     return SaleResponse(
         id=sale.id,
         client_id=sale.client_id,
@@ -396,7 +402,7 @@ def sale_response(db: Session, sale: Sale) -> SaleResponse:
         branch_id=sale.branch_id,
         sale_date=sale.sale_date,
         total=sale.total,
-        sale_type=sale.sale_type,
+        sale_type=st,
         delivery_status=getattr(sale, "delivery_status", "PAGADO") or "PAGADO",
         customer_notes=getattr(sale, "customer_notes", None),
         delivered_at=getattr(sale, "delivered_at", None),
@@ -480,7 +486,8 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
 
 
 def create_reservation(db: Session, user_id: int, data: ReservationCreate) -> Reservation:
-    if db.get(Branch, data.branch_id) is None:
+    branch = db.get(Branch, data.branch_id)
+    if branch is None:
         raise HTTPException(404, "Branch not found")
     entries = []
     requested: dict[int, int] = {}
@@ -506,6 +513,7 @@ def create_reservation(db: Session, user_id: int, data: ReservationCreate) -> Re
             raise HTTPException(409, "Stock already reserved for this branch and time")
     entries = [(_stock(db, stock_id), quantity) for stock_id, quantity in requested.items()]
     reservation = Reservation(
+        tenant_id=branch.tenant_id,
         client_id=user_id,
         branch_id=data.branch_id,
         reservation_date=data.reservation_date,
@@ -542,6 +550,7 @@ def list_reservations(
     status: str | None = None,
     branch_id: int | None = None,
     reservation_date=None,
+    tenant_id: int | None = None,
 ) -> list[Reservation]:
     q = select(Reservation).order_by(Reservation.reservation_date.desc(), Reservation.reservation_time)
     if client_id is not None:
@@ -552,6 +561,8 @@ def list_reservations(
         q = q.where(Reservation.branch_id == branch_id)
     if reservation_date is not None:
         q = q.where(Reservation.reservation_date == reservation_date)
+    if tenant_id is not None:
+        q = q.where(Reservation.tenant_id == tenant_id)
     return list(db.scalars(q).all())
 
 

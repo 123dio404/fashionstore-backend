@@ -137,7 +137,7 @@ class SaleResponse(ORMModel):
     branch_id: int
     sale_date: datetime
     total: Decimal
-    sale_type: SaleType
+    sale_type: str = "pos"
     delivery_status: str = "PAGADO"
     customer_notes: str | None = None
     delivered_at: datetime | None = None
@@ -159,7 +159,7 @@ class ReceiptResponse(BaseModel):
     receipt_number: str
     invoice_number: str
     sale_date: datetime
-    sale_type: SaleType
+    sale_type: str = "pos"
     branch_id: int
     client_id: int
     subtotal: Decimal

@@ -136,7 +136,8 @@ def remove_cart_item(
 def buy_cart(
     data: CheckoutRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    return commerce_service.checkout(db, user.id, data)
+    sale = commerce_service.checkout(db, user.id, data)
+    return commerce_service.sale_response(db, sale)
 
 
 @router.get('/sales', response_model=list[SaleResponse])
@@ -146,8 +147,8 @@ def sales_history(
     db: Session = Depends(get_db),
 ):
     if user.role not in PRIVILEGED:
-        return commerce_service.list_sales(db, user.id)
-    return commerce_service.list_sales(db, client_id)
+        return commerce_service.list_sales(db, user.id, tenant_id=user.tenant_id)
+    return commerce_service.list_sales(db, client_id, tenant_id=user.tenant_id)
 
 
 @router.get('/sales/{sale_id}', response_model=SaleResponse)
@@ -170,7 +171,8 @@ def sale_receipt(sale_id: int, user: User = Depends(get_current_user), db: Sessi
 def register_pos_sale(
     data: PosSaleCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    return commerce_service.pos_sale(db, user.id, data)
+    sale = commerce_service.pos_sale(db, user.id, data)
+    return commerce_service.sale_response(db, sale)
 
 
 @router.get('/reservations', response_model=list[ReservationResponse])
@@ -182,8 +184,8 @@ def list_reservations(
     db: Session = Depends(get_db),
 ):
     if user.role not in RESERVATION_STAFF:
-        return commerce_service.list_reservations(db, user.id, status.value if status else None, branch_id, reservation_date)
-    return commerce_service.list_reservations(db, None, status.value if status else None, branch_id, reservation_date)
+        return commerce_service.list_reservations(db, user.id, status.value if status else None, branch_id, reservation_date, tenant_id=user.tenant_id)
+    return commerce_service.list_reservations(db, None, status.value if status else None, branch_id, reservation_date, tenant_id=user.tenant_id)
 
 
 @router.post('/reservations', response_model=ReservationResponse, status_code=201)
