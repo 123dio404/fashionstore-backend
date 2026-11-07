@@ -36,20 +36,45 @@ def update_me(
     return current
 
 
-@router.get('', response_model=list[UserResponse], dependencies=[admin])
-def list_users(db: Session = Depends(get_db)): return list(db.scalars(select(User).order_by(User.id.desc())).all())
-@router.post('', response_model=UserResponse, status_code=201, dependencies=[admin])
-def add_user(data: UserCreate, db: Session = Depends(get_db)): return create_user(db, data)
-@router.get('/{user_id}', response_model=UserResponse, dependencies=[admin])
-def get_user(user_id: int, db: Session = Depends(get_db)):
-    obj = db.get(User, user_id)
-    if obj is None: raise HTTPException(404, 'User not found')
-    return obj
-@router.patch('/{user_id}', response_model=UserResponse, dependencies=[admin])
-@router.put('/{user_id}', response_model=UserResponse, include_in_schema=False, dependencies=[admin])
-def edit_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db)):
-    obj = db.get(User, user_id)
-    if obj is None: raise HTTPException(404, 'User not found')
+@router.get('', response_model=list[UserResponse])
+def list_users(
+    current: User = Depends(require_role(Role.ADMINISTRADOR)),
+    db: Session = Depends(get_db),
+):
+    query = select(User).order_by(User.id.desc())
+    # Aislamiento multitenant: un administrador solo ve usuarios de su empresa.
+    if current.tenant_id is not None:
+        query = query.where(User.tenant_id == current.tenant_id)
+    return list(db.scalars(query).all())
+
+
+@router.post('', response_model=UserResponse, status_code=201)
+def add_user(
+    data: UserCreate,
+    current: User = Depends(require_role(Role.ADMINISTRADOR)),
+    db: Session = Depends(get_db),
+):
+    return create_user(db, data, tenant_id=current.tenant_id)
+
+
+@router.get('/{user_id}', response_model=UserResponse)
+def get_user(
+    user_id: int,
+    current: User = Depends(require_role(Role.ADMINISTRADOR)),
+    db: Session = Depends(get_db),
+):
+    return _tenant_user(db, user_id, current)
+
+
+@router.patch('/{user_id}', response_model=UserResponse)
+@router.put('/{user_id}', response_model=UserResponse, include_in_schema=False)
+def edit_user(
+    user_id: int,
+    data: UserUpdate,
+    current: User = Depends(require_role(Role.ADMINISTRADOR)),
+    db: Session = Depends(get_db),
+):
+    obj = _tenant_user(db, user_id, current)
     values = data.model_dump(exclude_unset=True)
     if 'email' in values: values['email'] = normalize_email(values['email'])
     if 'password' in values: values['password_hash'] = get_password_hash(values.pop('password'))
@@ -59,8 +84,23 @@ def edit_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db)):
     try: db.commit(); db.refresh(obj)
     except IntegrityError: db.rollback(); raise HTTPException(409, 'Email already registered')
     return obj
-@router.delete('/{user_id}', status_code=204, dependencies=[admin])
-def remove_user(user_id: int, db: Session = Depends(get_db)):
-    obj = db.get(User, user_id)
-    if obj is None: raise HTTPException(404, 'User not found')
+
+
+@router.delete('/{user_id}', status_code=204)
+def remove_user(
+    user_id: int,
+    current: User = Depends(require_role(Role.ADMINISTRADOR)),
+    db: Session = Depends(get_db),
+):
+    obj = _tenant_user(db, user_id, current)
     obj.is_active = False; db.commit()
+
+
+def _tenant_user(db: Session, user_id: int, current: User) -> User:
+    """Busca un usuario validando que pertenezca al mismo tenant del administrador."""
+    obj = db.get(User, user_id)
+    if obj is None:
+        raise HTTPException(404, 'User not found')
+    if current.tenant_id is not None and obj.tenant_id != current.tenant_id:
+        raise HTTPException(404, 'User not found')
+    return obj

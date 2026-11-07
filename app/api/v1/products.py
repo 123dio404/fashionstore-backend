@@ -2,12 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
-from app.api.deps import get_db, require_role
+from app.api.deps import get_db, require_role, get_optional_current_user
 from app.models.inventory import Stock
 from app.models.product import Category, Color, Product, ProductVariant, Season, Size
-from app.models.user import Role
+from app.models.user import Role, User
 from app.schemas.inventory import AvailabilityResponse
-from app.schemas.product import (CategoryResponse, ColorResponse, ParameterCreate, ParameterUpdate, ProductCreate, ProductResponse, ProductUpdate, SeasonResponse, SizeResponse, VariantCreate, VariantResponse)
+from app.schemas.product import (CategoryResponse, ColorResponse, ParameterCreate, ParameterUpdate, ProductCreate, ProductResponse, ProductUpdate, SeasonResponse, SizeResponse, VariantCreate, VariantResponse, VariantUpdate)
 from app.services.product_service import create_product, update_product
 router = APIRouter(tags=['products'])
 editor = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO))
@@ -119,35 +119,115 @@ def delete_color(item_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 @router.get('/products', response_model=list[ProductResponse])
-def list_products(db: Session = Depends(get_db)):
-    return list(db.scalars(select(Product).options(selectinload(Product.variants)).order_by(Product.name)).all())
-@router.post('/products', response_model=ProductResponse, status_code=201, dependencies=[editor])
-def add_product(data: ProductCreate, db: Session = Depends(get_db)): return create_product(db,data)
+def list_products(
+    tenant_id: int | None = None,
+    current: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """Catálogo público. Si hay usuario autenticado se restringe a su empresa (aislamiento multitenant)."""
+    query = select(Product).options(selectinload(Product.variants)).order_by(Product.name)
+    if current is not None and current.role != Role.SUPERADMIN and current.tenant_id is not None:
+        query = query.where(Product.tenant_id == current.tenant_id)
+    elif tenant_id is not None:
+        query = query.where(Product.tenant_id == tenant_id)
+    return list(db.scalars(query).all())
+
+
+@router.post('/products', response_model=ProductResponse, status_code=201)
+def add_product(
+    data: ProductCreate,
+    current: User = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO)),
+    db: Session = Depends(get_db),
+):
+    return create_product(db, data, tenant_id=current.tenant_id)
+
+
 @router.get('/products/{product_id}', response_model=ProductResponse)
-def get_product(product_id: int, db: Session = Depends(get_db)):
-    obj=db.scalar(select(Product).where(Product.id==product_id).options(selectinload(Product.variants)))
-    if not obj: raise HTTPException(404,'Product not found')
-    return obj
-@router.patch('/products/{product_id}', response_model=ProductResponse, dependencies=[editor])
-def edit_product(product_id: int, data: ProductUpdate, db: Session = Depends(get_db)):
-    obj=db.get(Product,product_id)
-    if not obj: raise HTTPException(404,'Product not found')
-    return update_product(db,obj,data)
-@router.delete('/products/{product_id}', status_code=204, dependencies=[editor])
-def delete_product(product_id: int, db: Session = Depends(get_db)):
-    obj = db.get(Product, product_id)
-    if not obj: raise HTTPException(404, 'Product not found')
+def get_product(
+    product_id: int,
+    current: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    return _scoped_product(db, product_id, current)
+
+
+@router.patch('/products/{product_id}', response_model=ProductResponse)
+def edit_product(
+    product_id: int,
+    data: ProductUpdate,
+    current: User = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO)),
+    db: Session = Depends(get_db),
+):
+    obj = _scoped_product(db, product_id, current)
+    return update_product(db, obj, data)
+
+
+@router.delete('/products/{product_id}', status_code=204)
+def delete_product(
+    product_id: int,
+    current: User = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO)),
+    db: Session = Depends(get_db),
+):
+    obj = _scoped_product(db, product_id, current)
     db.delete(obj)
     db.commit()
-@router.post('/products/{product_id}/variants', response_model=VariantResponse, status_code=201, dependencies=[editor])
-def add_variant(product_id: int, data: VariantCreate, db: Session = Depends(get_db)):
-    if not db.get(Product,product_id): raise HTTPException(404,'Product not found')
+
+
+@router.post('/products/{product_id}/variants', response_model=VariantResponse, status_code=201)
+def add_variant(
+    product_id: int,
+    data: VariantCreate,
+    current: User = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO)),
+    db: Session = Depends(get_db),
+):
+    if not _scoped_product(db, product_id, current): raise HTTPException(404,'Product not found')
     if not db.get(Size,data.size_id): raise HTTPException(404,'Size not found')
     if not db.get(Color,data.color_id): raise HTTPException(404,'Color not found')
     obj=ProductVariant(product_id=product_id,**data.model_dump()); db.add(obj)
     try: db.commit(); db.refresh(obj)
     except IntegrityError: db.rollback(); raise HTTPException(409,'Variant already exists')
     return obj
+
+
+@router.patch('/products/{product_id}/variants/{variant_id}', response_model=VariantResponse)
+def edit_variant(
+    product_id: int,
+    variant_id: int,
+    data: VariantUpdate,
+    current: User = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO)),
+    db: Session = Depends(get_db),
+):
+    """Edita talla, color, código, precio o estado de una variante (CU-05)."""
+    _scoped_product(db, product_id, current)
+    variant = db.scalar(select(ProductVariant).where(ProductVariant.id == variant_id, ProductVariant.product_id == product_id))
+    if not variant: raise HTTPException(404, 'Variant not found')
+    values = data.model_dump(exclude_unset=True)
+    if values.get('size_id') is not None and not db.get(Size, values['size_id']): raise HTTPException(404, 'Size not found')
+    if values.get('color_id') is not None and not db.get(Color, values['color_id']): raise HTTPException(404, 'Color not found')
+    for key, value in values.items(): setattr(variant, key, value)
+    try: db.commit(); db.refresh(variant)
+    except IntegrityError: db.rollback(); raise HTTPException(409, 'Variant already exists')
+    return variant
+
+
+@router.delete('/products/{product_id}/variants/{variant_id}', status_code=204)
+def delete_variant(
+    product_id: int,
+    variant_id: int,
+    current: User = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO)),
+    db: Session = Depends(get_db),
+):
+    _scoped_product(db, product_id, current)
+    variant = db.scalar(select(ProductVariant).where(ProductVariant.id == variant_id, ProductVariant.product_id == product_id))
+    if not variant: raise HTTPException(404, 'Variant not found')
+    try:
+        db.delete(variant)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, 'Variant has inventory or sales')
+
+
 @router.get('/products/{product_id}/availability', response_model=list[AvailabilityResponse])
 def availability(product_id: int, branch_id: int, db: Session = Depends(get_db)):
     if not db.get(Product,product_id): raise HTTPException(404,'Product not found')
@@ -157,3 +237,17 @@ def availability(product_id: int, branch_id: int, db: Session = Depends(get_db))
         .where(ProductVariant.product_id == product_id, Stock.branch_id == branch_id)
     ).all()
     return [AvailabilityResponse(product_id=product_id,variant_id=x.variant_id,branch_id=x.branch_id,physical_stock=x.physical_stock,reserved_stock=x.reserved_stock,available_stock=x.physical_stock-x.reserved_stock,stock_id=x.id) for x in rows]
+
+
+def _scoped_product(db: Session, product_id: int, current: User | None) -> Product:
+    """Obtiene un producto validando el tenant del usuario (evita acceso cruzado entre empresas)."""
+    obj = db.scalar(
+        select(Product)
+        .where(Product.id == product_id)
+        .options(selectinload(Product.variants))
+    )
+    if obj is None:
+        raise HTTPException(404, 'Product not found')
+    if current is not None and current.tenant_id is not None and obj.tenant_id != current.tenant_id:
+        raise HTTPException(404, 'Product not found')
+    return obj

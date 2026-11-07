@@ -25,6 +25,13 @@ class VariantCreate(BaseModel):
     color_id: int
     codigo: str = Field(min_length=1, max_length=50)
     price: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+
+class VariantUpdate(BaseModel):
+    size_id: int | None = None
+    color_id: int | None = None
+    codigo: str | None = Field(default=None, min_length=1, max_length=50)
+    price: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    is_active: bool | None = None
 class VariantResponse(ORMModel):
     id: int
     product_id: int

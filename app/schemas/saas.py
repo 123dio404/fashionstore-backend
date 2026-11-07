@@ -13,6 +13,22 @@ class PlanResponse(ORMModel):
     is_active: bool
 
 
+class PlanCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    max_branches: int = Field(ge=1, le=10000)
+    has_ai_reports: bool = False
+    monthly_price: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
+    is_active: bool = True
+
+
+class PlanUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=100)
+    max_branches: int | None = Field(default=None, ge=1, le=10000)
+    has_ai_reports: bool | None = None
+    monthly_price: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    is_active: bool | None = None
+
+
 class SubscriptionResponse(ORMModel):
     id: int
     tenant_id: int
@@ -37,6 +53,10 @@ class TenantSummaryResponse(ORMModel):
 class ChangePlanRequest(BaseModel):
     plan_name: str = Field(description="Nombre del plan: 'Básico' o 'Profesional'")
     months: int = Field(default=12, ge=1, le=36, description="Meses de vigencia para la suscripción simulada")
+    tenant_id: int | None = Field(
+        default=None,
+        description="Solo Superadmin: empresa objetivo. Los administradores solo pueden cambiar la propia.",
+    )
 
 
 class TenantCreateRequest(BaseModel):

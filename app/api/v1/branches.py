@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from app.api.deps import get_current_user, get_db, require_role, get_current_tenant_id
+from app.api.deps import get_current_user, get_db, require_role, get_current_tenant_id, get_optional_current_user
 from app.models.branch import Branch, City
 from app.models.tenant import Subscription, Tenant
 from app.models.user import Role, User
@@ -64,11 +64,14 @@ def delete_city(city_id: int, db: Session = Depends(get_db)):
 @router.get('/branches', response_model=list[BranchResponse])
 def branches(
     tenant_id: int | None = None,
+    current: User | None = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
-    """Lista sucursales. Si se especifica tenant_id filtra por la empresa correspondiente."""
+    """Lista sucursales. Los usuarios de una empresa solo ven las suyas (aislamiento multitenant)."""
     query = select(Branch).order_by(Branch.name)
-    if tenant_id:
+    if current is not None and current.tenant_id is not None:
+        query = query.where(Branch.tenant_id == current.tenant_id)
+    elif tenant_id:
         query = query.where(Branch.tenant_id == tenant_id)
     return list(db.scalars(query).all())
 
@@ -106,9 +109,15 @@ def add_branch(
     return obj
 
 @router.get('/branches/{branch_id}', response_model=BranchResponse)
-def get_branch(branch_id: int, db: Session = Depends(get_db)):
+def get_branch(
+    branch_id: int,
+    current: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
     obj = db.get(Branch, branch_id)
     if not obj:
+        raise HTTPException(404, 'Branch not found')
+    if current is not None and current.tenant_id is not None and obj.tenant_id != current.tenant_id:
         raise HTTPException(404, 'Branch not found')
     return obj
 

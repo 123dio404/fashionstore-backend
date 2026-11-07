@@ -12,9 +12,20 @@ from app.services import commerce_service
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 staff = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO, Role.CAJERO, Role.SUPERADMIN))
+# Los clientes también pueden sincronizar sus propias ventas/reservas hechas
+# offline desde la app móvil; la auditoría de conflictos sigue siendo de staff.
+batch_access = Depends(
+    require_role(
+        Role.ADMINISTRADOR,
+        Role.ENCARGADO,
+        Role.CAJERO,
+        Role.SUPERADMIN,
+        Role.CLIENTE,
+    )
+)
 
 
-@router.post("/batch", response_model=SyncBatchResponse, dependencies=[staff])
+@router.post("/batch", response_model=SyncBatchResponse, dependencies=[batch_access])
 def sync_batch(
     data: SyncBatchRequest,
     user: User = Depends(get_current_user),
