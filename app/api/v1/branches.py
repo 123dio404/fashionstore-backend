@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from app.api.deps import get_current_user, get_db, require_role, get_current_tenant_id
+from app.api.deps import get_current_user, get_db, require_role, get_current_tenant_id, get_optional_user
 from app.models.branch import Branch, City
 from app.models.tenant import Subscription, Tenant
 from app.models.user import Role, User
@@ -64,12 +64,14 @@ def delete_city(city_id: int, db: Session = Depends(get_db)):
 @router.get('/branches', response_model=list[BranchResponse])
 def branches(
     tenant_id: int | None = None,
+    current_user: User | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
-    """Lista sucursales. Si se especifica tenant_id filtra por la empresa correspondiente."""
+    """Lista sucursales. Si se especifica tenant_id o usuario autenticado, filtra por la empresa correspondiente."""
     query = select(Branch).order_by(Branch.name)
-    if tenant_id:
-        query = query.where(Branch.tenant_id == tenant_id)
+    effective_tenant = tenant_id or (current_user.tenant_id if current_user else None)
+    if effective_tenant is not None:
+        query = query.where(Branch.tenant_id == effective_tenant)
     return list(db.scalars(query).all())
 
 @router.post('/branches', response_model=BranchResponse, status_code=201)

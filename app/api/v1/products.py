@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
-from app.api.deps import get_db, require_role
+from app.api.deps import get_db, require_role, get_optional_user
 from app.models.inventory import Stock
 from app.models.product import Category, Color, Product, ProductVariant, Season, Size
-from app.models.user import Role
+from app.models.user import Role, User
 from app.schemas.inventory import AvailabilityResponse
 from app.schemas.product import (CategoryResponse, ClearanceBatchRequest, ColorResponse, ParameterCreate, ParameterUpdate, ProductCreate, ProductResponse, ProductUpdate, SeasonResponse, SizeResponse, VariantCreate, VariantResponse)
 from app.services.product_service import create_product, update_product
@@ -124,10 +124,18 @@ def list_products(
     season_id: int | None = None,
     material: str | None = None,
     is_clearance: bool | None = None,
+    tenant_id: int | None = None,
+    current_user: User | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
-    """Lista catálogo de prendas con soporte para filtros por material textil (alergias/temporada) y liquidación."""
+    """Lista catálogo de prendas con soporte para aislamiento multitenant, filtros por material textil y liquidación."""
     query = select(Product).options(selectinload(Product.variants))
+
+    # Aislamiento Multitenant
+    effective_tenant = tenant_id or (current_user.tenant_id if current_user else None)
+    if effective_tenant is not None:
+        query = query.where(Product.tenant_id == effective_tenant)
+
     if category_id is not None:
         query = query.where(Product.category_id == category_id)
     if season_id is not None:
@@ -163,8 +171,18 @@ def apply_clearance_batch(data: ClearanceBatchRequest, db: Session = Depends(get
         "affected_products": count,
         "discount_percentage": data.discount_percentage,
     }
-@router.post('/products', response_model=ProductResponse, status_code=201, dependencies=[editor])
-def add_product(data: ProductCreate, db: Session = Depends(get_db)): return create_product(db,data)
+@router.post('/products', response_model=ProductResponse, status_code=201)
+def add_product(
+    data: ProductCreate,
+    user: User = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO, Role.SUPERADMIN)),
+    db: Session = Depends(get_db),
+):
+    prod = create_product(db, data)
+    if user.tenant_id is not None:
+        prod.tenant_id = user.tenant_id
+        db.commit()
+        db.refresh(prod)
+    return prod
 @router.get('/products/{product_id}', response_model=ProductResponse)
 def get_product(product_id: int, db: Session = Depends(get_db)):
     obj=db.scalar(select(Product).where(Product.id==product_id).options(selectinload(Product.variants)))

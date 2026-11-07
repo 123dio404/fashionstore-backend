@@ -8,6 +8,7 @@ from app.core.security import decode_access_token
 from app.models.user import Role, User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/api/v1/auth/login')
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl='/api/v1/auth/login', auto_error=False)
 
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
@@ -65,3 +66,21 @@ def require_ai_plan(db: Session = Depends(get_db), current_user: User = Depends(
             detail="Los reportes generativos mediante IA están reservados para empresas con Plan Profesional. Actualice su suscripción."
         )
     return sub
+
+
+def get_optional_user(token: str | None = Depends(oauth2_scheme_optional), db: Session = Depends(get_db)) -> User | None:
+    """Extrae el usuario autenticado si existe un token Bearer en la petición, sin lanzar error 401 si no lo hay."""
+    if not token:
+        return None
+    try:
+        payload = decode_access_token(token)
+        subject = payload.get('sub')
+        if not subject:
+            return None
+        user_id = int(subject)
+        user = db.get(User, user_id)
+        if user and user.is_active:
+            return user
+    except Exception:
+        return None
+    return None
