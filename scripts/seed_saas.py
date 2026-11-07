@@ -228,10 +228,23 @@ def seed_saas_data():
             db.add(b2)
         db.flush()
 
-        # Asignar productos existentes a Tenant 1
-        existing_products = db.scalars(select(Product).where(Product.tenant_id.is_(None))).all()
-        for p in existing_products:
-            p.tenant_id = tenant1.id
+        # Asignar y renombrar productos para Moda Urbana S.A. (eliminando marcas FashionStore)
+        brand_map = {
+            'Camisa Oxford': ('Camisa Oxford Streetwear', 'Urban Style Co.'),
+            'Blazer Oversize Lana': ('Blazer Oversize Lana', 'Urban Casual'),
+            'Blazer Estructurado': ('Blazer Estructurado Street', 'Urban Style Co.'),
+            'Chaqueta Denim': ('Chaqueta Denim Retro', 'Metro Denim'),
+            'Sneakers Clásicas': ('Sneakers Clásicas Urbanas', 'Urban Kicks'),
+            'Sneakers Blancas': ('Sneakers Blancas Chunky', 'Urban Kicks'),
+            'Vestido Midi Fluido': ('Vestido Midi Fluido', 'Urban Chic'),
+            'Vestido Midi Rojo': ('Vestido Midi Rojo Urbano', 'Urban Chic'),
+            'Conjunto Punto Acanalado': ('Conjunto Punto Acanalado', 'StreetWear Lab'),
+        }
+        for p in db.scalars(select(Product).where(Product.tenant_id == tenant1.id)).all():
+            if p.name in brand_map:
+                p.name, p.brand = brand_map[p.name]
+            elif p.brand == 'FashionStore':
+                p.brand = 'Urban Style Co.'
         db.flush()
 
         # ─────────────────────────────────────────────────────────────
