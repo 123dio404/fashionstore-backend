@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db, get_optional_current_user, require_role
 from app.models.branch import Branch
 from app.models.inventory import InventoryMovement, MovementType, Stock
+from app.models.tenant import Tenant
 from app.models.user import Role, User
 from app.schemas.inventory import MovementCreate, MovementResponse, StockAdjustment, StockResponse, TransferRequest
 from app.services.inventory_service import adjust_stock, transfer_stock
@@ -26,6 +27,11 @@ def list_stock(
     if effective_tenant is not None:
         branch_ids = select(Branch.id).where(Branch.tenant_id == effective_tenant)
         query = query.where(Stock.branch_id.in_(branch_ids))
+    else:
+        first_tenant = db.scalar(select(Tenant.id).where(Tenant.status == "Activo").order_by(Tenant.id))
+        if first_tenant:
+            branch_ids = select(Branch.id).where(Branch.tenant_id == first_tenant)
+            query = query.where(Stock.branch_id.in_(branch_ids))
     if branch_id:
         query = query.where(Stock.branch_id == branch_id)
     if variant_id:

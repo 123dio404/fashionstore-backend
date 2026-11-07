@@ -73,6 +73,10 @@ def branches(
         query = query.where(Branch.tenant_id == current.tenant_id)
     elif tenant_id:
         query = query.where(Branch.tenant_id == tenant_id)
+    else:
+        first_tenant = db.scalar(select(Tenant.id).where(Tenant.status == "Activo").order_by(Tenant.id))
+        if first_tenant:
+            query = query.where(Branch.tenant_id == first_tenant)
     return list(db.scalars(query).all())
 
 @router.post('/branches', response_model=BranchResponse, status_code=201)

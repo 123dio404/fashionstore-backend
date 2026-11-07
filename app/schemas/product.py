@@ -92,5 +92,7 @@ class ProductResponse(ORMModel):
     is_clearance: bool = False
     discount_percentage: Decimal = Decimal("0.00")
     is_active: bool
+    category_name: str | None = None
+    tenant_id: int | None = None
     model_3d_url: str | None = None; model_3d_format: str | None = None; technical_metadata: str | None = None
     variants: list[VariantResponse] = []

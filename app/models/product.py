@@ -70,6 +70,10 @@ class Product(Base):
         back_populates="product", cascade="all, delete-orphan"
     )
 
+    @property
+    def category_name(self) -> str | None:
+        return self.category.name if self.category else None
+
 
 class ProductVariant(Base):
     __tablename__ = "producto_variante"

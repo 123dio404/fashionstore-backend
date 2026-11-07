@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import get_db, require_role, get_optional_current_user
 from app.models.inventory import Stock
 from app.models.product import Category, Color, Product, ProductVariant, Season, Size
+from app.models.tenant import Tenant
 from app.models.user import Role, User
 from app.schemas.inventory import AvailabilityResponse
 from app.schemas.product import (CategoryResponse, ColorResponse, ParameterCreate, ParameterUpdate, ProductCreate, ProductResponse, ProductUpdate, SeasonResponse, SizeResponse, VariantCreate, VariantResponse, VariantUpdate)
@@ -130,6 +131,12 @@ def list_products(
         query = query.where(Product.tenant_id == current.tenant_id)
     elif tenant_id is not None:
         query = query.where(Product.tenant_id == tenant_id)
+    else:
+        # Si no hay usuario autenticado ni parámetro de tenant, aislar a la empresa por defecto (Moda Urbana)
+        # para que nunca aparezcan medias o prendas de gala mezcladas en la tienda general.
+        default_tenant = db.scalar(select(Tenant.id).where(Tenant.status == "Activo").order_by(Tenant.id))
+        if default_tenant:
+            query = query.where(Product.tenant_id == default_tenant)
     return list(db.scalars(query).all())
 
 
