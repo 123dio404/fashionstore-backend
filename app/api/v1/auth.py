@@ -17,5 +17,9 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(db, form.username, form.password)
     role_val = user.role.value if user.role else 'Cliente'
-    claims = {'role': role_val, 'tenant_id': user.tenant_id}
+    claims = {
+        'role': role_val,
+        'tenant_id': user.tenant_id,
+        'tenant_name': user.tenant_name,
+    }
     return {'access_token': create_access_token(user.id, claims=claims), 'token_type': 'bearer', 'user': user}

@@ -15,27 +15,32 @@ def stock_response(stock: Stock) -> StockResponse:
 
 @router.get('/stock',response_model=list[StockResponse])
 def list_stock(
-    branch_id: int|None=None,
-    variant_id: int|None=None,
-    current: User|None=Depends(get_optional_current_user),
-    db:Session=Depends(get_db),
+    branch_id: int | None = None,
+    variant_id: int | None = None,
+    tenant_id: int | None = None,
+    current: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
 ):
-    query=select(Stock).order_by(Stock.updated_at)
-    if branch_id: query=query.where(Stock.branch_id==branch_id)
-    if variant_id: query=query.where(Stock.variant_id==variant_id)
-    # Aislamiento multitenant: el inventario visible se limita a sucursales de la empresa.
-    if current is not None and current.tenant_id is not None:
-        branch_ids = select(Branch.id).where(Branch.tenant_id == current.tenant_id)
+    query = select(Stock).order_by(Stock.updated_at)
+    effective_tenant = tenant_id or (current.tenant_id if current else None)
+    if effective_tenant is not None:
+        branch_ids = select(Branch.id).where(Branch.tenant_id == effective_tenant)
         query = query.where(Stock.branch_id.in_(branch_ids))
+    if branch_id:
+        query = query.where(Stock.branch_id == branch_id)
+    if variant_id:
+        query = query.where(Stock.variant_id == variant_id)
     return [stock_response(x) for x in db.scalars(query).all()]
+
 @router.get('/stock/{stock_id}',response_model=StockResponse)
 def get_stock(
     stock_id: int,
-    current: User|None=Depends(get_optional_current_user),
-    db:Session=Depends(get_db),
+    current: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
 ):
-    obj=db.get(Stock,stock_id)
-    if not obj: raise HTTPException(404,'Stock not found')
+    obj = db.get(Stock, stock_id)
+    if not obj:
+        raise HTTPException(404, 'Stock not found')
     if current is not None and current.tenant_id is not None:
         branch = db.get(Branch, obj.branch_id)
         if not branch or branch.tenant_id != current.tenant_id:

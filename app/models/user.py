@@ -41,6 +41,16 @@ class User(Base):
         except ValueError:
             return None
 
+    @property
+    def tenant_name(self) -> Optional[str]:
+        return self.tenant.name if self.tenant else None
+
+    @property
+    def plan_name(self) -> Optional[str]:
+        if self.tenant and self.tenant.subscription and self.tenant.subscription.plan:
+            return self.tenant.subscription.plan.name
+        return None
+
 
 class Rol(Base):
     __tablename__ = "rol"

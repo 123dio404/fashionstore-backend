@@ -13,7 +13,7 @@ todas con la contraseña estándar: Admin123.
 from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.core.database import SessionLocal
 from app.core.security import get_password_hash
@@ -293,6 +293,23 @@ def seed_saas_data():
             db.add(b_mm2)
         db.flush()
 
+        # Limpieza de stock residual o cruzado entre diferentes sucursales/empresas
+        db.execute(
+            text("""
+                DELETE FROM inventario
+                WHERE id IN (
+                    SELECT s.id
+                    FROM inventario s
+                    JOIN sucursal b ON s.id_sucursal = b.id
+                    JOIN producto_variante pv ON s.id_variante = pv.id
+                    JOIN producto p ON pv.id_producto = p.id
+                    WHERE (b.id_empresa IS NOT NULL AND p.id_empresa IS NOT NULL AND b.id_empresa != p.id_empresa)
+                       OR (b.id_empresa IS NULL AND s.id_sucursal IN (2, 3))
+                )
+            """)
+        )
+        db.flush()
+
         # Categorías especializadas de Medias
         cat_dep = ensure_category(db, "Medias Deportivas")
         cat_cla = ensure_category(db, "Medias Clásicas y Ejecutivas")
@@ -550,6 +567,15 @@ def seed_saas_data():
                 min_stock=3,
             )
             db.add(stock_elegance)
+            stock_elegance_b4 = Stock(
+                branch_id=b4.id,
+                variant_id=var1.id,
+                size_id=size_m.id,
+                physical_stock=10,
+                reserved_stock=0,
+                min_stock=2,
+            )
+            db.add(stock_elegance_b4)
 
         # Producto 2: Traje Ejecutivo Italiano (con bajo stock para Reporte 4)
         p_traje = db.scalar(select(Product).where(Product.tenant_id == tenant3.id, Product.name == "Traje Ejecutivo Italiano"))
@@ -586,6 +612,15 @@ def seed_saas_data():
                 min_stock=5,
             )
             db.add(stock_critico)
+            stock_traje_b3 = Stock(
+                branch_id=b3.id,
+                variant_id=var2.id,
+                size_id=size_l.id,
+                physical_stock=8,
+                reserved_stock=0,
+                min_stock=2,
+            )
+            db.add(stock_traje_b3)
             db.flush()
 
         # Siembra de ventas demo para Tenant 3
