@@ -125,14 +125,14 @@ def seed_saas_data():
             plan_pro = Plan(
                 name="Profesional",
                 max_branches=5,
-                has_ai_reports=False,
+                has_ai_reports=True,
                 monthly_price=Decimal("69.99"),
                 is_active=True,
             )
             db.add(plan_pro)
         else:
             plan_pro.max_branches = 5
-            plan_pro.has_ai_reports = False
+            plan_pro.has_ai_reports = True
             plan_pro.monthly_price = Decimal("69.99")
             plan_pro.is_active = True
 
