@@ -51,7 +51,7 @@ class TenantSummaryResponse(ORMModel):
 
 
 class ChangePlanRequest(BaseModel):
-    plan_name: str = Field(description="Nombre del plan: 'Básico' o 'Profesional'")
+    plan_name: str = Field(description="Nombre del plan: 'Básico', 'Profesional' o 'Empresarial'")
     months: int = Field(default=12, ge=1, le=36, description="Meses de vigencia para la suscripción simulada")
     tenant_id: int | None = Field(
         default=None,
@@ -63,7 +63,7 @@ class TenantCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=150, description="Razón Social / Nombre de la empresa")
     slug: str = Field(min_length=2, max_length=100, description="Identificador único (ej: zara-bolivia)")
     tax_id: str | None = Field(default=None, description="NIT o documento fiscal")
-    plan_name: str = Field(default="Básico", description="Plan inicial: 'Básico' o 'Profesional'")
+    plan_name: str = Field(default="Básico", description="Plan inicial: 'Básico', 'Profesional' o 'Empresarial'")
     admin_email: str = Field(description="Email del administrador de la empresa")
     admin_name: str = Field(default="Administrador", description="Nombre completo del administrador")
-    admin_password: str = Field(default="admin123", min_length=6, description="Contraseña inicial del administrador")
+    admin_password: str = Field(default="Admin123", min_length=6, description="Contraseña inicial del administrador")

@@ -50,8 +50,11 @@
 * **RF07:** Aislar la información impidiendo accesos cruzados entre empresas en todo el backend.
 
 #### PAQ-03: Catálogo e Inventario
-* **RF08:** Administrar prendas con categorías, temporadas y variantes de talla, color y precio.
+* **RF08:** Administrar prendas con categorías, temporadas, variantes de talla y color, material textil (alergias/estación) y soporte multicolor.
+* **RF08-A (Precios Menudeo y Mayorista):** Configurar precio por menor y precio por mayor activado automáticamente según umbrales de cantidad en carrito (ej. >= 3 unidades o docena).
+* **RF08-B (Liquidación de Fin de Temporada):** Aplicación masiva de descuentos por lote (40% a 60%) en prendas de temporada saliente para recuperación de capital sin afectar novedades.
 * **RF09:** Controlar existencias de inventario independientes por cada sucursal física.
+* **RF09-B (Compras y Abastecimiento):** Registrar notas de compra e ingreso formal de mercadería a proveedores con actualización automática de stock y costos.
 
 #### PAQ-04: Operaciones Offline y Sincronización
 * **RF10:** Descargar y almacenar localmente el catálogo y stock conocido (IndexedDB en PWA, SQLite en Móvil).
@@ -59,12 +62,15 @@
 * **RF12:** Registrar reservas de prendas sin conexión a Internet.
 * **RF13:** Consultar lista de ventas y reservas locales pendientes de sincronización.
 * **RF14:** Sincronizar cola de operaciones pendientes al recuperar conectividad a Internet.
-* **RF15:** Validar idempotencia en backend para no duplicar ventas ante reintentos de envío.
+* **RF15:** Validar idempotencia en backend para no duplicar ventas ante reintentos de envío o clics compulsivos.
 * **RF16:** Detectar y gestionar conflictos de inventario cuando el stock central sea insuficiente.
+* **RF16-B (Máquina de Estados de Despacho):** Trazabilidad del pedido (`PAGADO` -> `POR_DESPACHAR` -> `ENVIADO` -> `ENTREGADO_CONFORME`) con confirmación de conformidad del cliente en app o web.
 
 #### PAQ-05: Políticas Postventa
 * **RF17:** Registrar cambios de prendas de vestir adquiridas dentro de un tiempo determinado (30 días).
-* **RF18:** Actualizar inventario por reingreso de la prenda devuelta y egreso de la nueva prenda.
+* **RF17-B (Notificación Push de Diferencia):** Notificar al móvil del cliente si la nueva prenda tiene mayor costo para cobro inmediato en pasarela.
+* **RF17-C (Políticas de Reembolso Financiero):** Si la prenda nueva cuesta menos o se desiste, liquidar el reembolso en el arqueo mensual de caja con 10% de retención administrativa.
+* **RF18:** Actualizar inventario atómicamente por reingreso (+1) de la prenda devuelta y egreso (-1) de la nueva prenda.
 
 #### PAQ-06: Analítica con Machine Learning
 * **RF19:** Generar conjunto de datos sintéticos de ventas y transacciones para entrenamiento.
@@ -109,46 +115,49 @@
 * **RN-04 (Idempotencia Transaccional):** Toda operación offline lleva un UUID v4 generado en cliente. Transacciones repetidas se confirman sin reprocesar inventario.
 * **RN-05 (Gestión de Conflictos):** Si al sincronizar una venta offline no hay stock central suficiente, la operación se marca en estado `CONFLICTO` para ajuste administrativo.
 * **RN-06 (Plazo Máximo de Cambio):** Solo se admiten cambios de prendas si la venta original tiene una antigüedad menor o igual a 30 días.
+* **RN-07 (Doble Esquema de Precios):** Las prendas cuentan con precio minorista y mayorista. El precio mayorista se activa de forma automática cuando el cliente alcanza la cantidad mínima umbral en su carrito.
+* **RN-08 (Descuento de Stock Condicional):** En pedidos en línea, el stock físico permanece en reserva/intacto y se descuenta únicamente tras la confirmación exitosa de la pasarela de pagos.
+* **RN-09 (Políticas Financieras de Reembolso):** En devoluciones donde aplique reembolso de dinero, se retiene un 10% por costos administrativos y el saldo se programa para liquidación en el cierre mensual de caja.
 
 ---
 
 ## 6. Casos de Uso (CU)
 
 ### PAQ-01: Gestión SaaS y Multitenant
-* **CU-01:** Registrar empresa contratante (Tenant) — *Actor: Superadministrador SaaS*
-* **CU-02:** Administrar planes de suscripción — *Actor: Superadministrador SaaS*
-* **CU-03:** Asignar y cambiar plan a una empresa — *Actor: Superadministrador SaaS*
-* **CU-04:** Consultar estado y vigencia de la suscripción — *Actor: Administrador de Empresa*
+* **CU-01:** Registrar empresa contratante (Tenant) — *Actor: Superadministrador SaaS* [WEB]
+* **CU-02:** Administrar planes de suscripción — *Actor: Superadministrador SaaS* [WEB]
+* **CU-03:** Asignar y cambiar plan de suscripción — *Actor: Superadministrador SaaS* [WEB]
+* **CU-04:** Monitorear estado y vigencia de suscripción — *Actor: Administrador de Empresa* [WEB]
 
 ### PAQ-02: Organización y Usuarios
-* **CU-05:** Administrar sucursales (con validación de límite de plan) — *Actor: Administrador de Empresa*
-* **CU-06:** Administrar usuarios y roles por empresa — *Actor: Administrador de Empresa*
+* **CU-05:** Administrar sucursales físicas — *Actor: Administrador de Empresa* [WEB]
+* **CU-06:** Administrar usuarios y roles por empresa — *Actor: Administrador de Empresa* [WEB]
 
 ### PAQ-03: Catálogo e Inventario
-* **CU-07:** Administrar productos, variantes y categorías — *Actor: Administrador de Empresa*
-* **CU-08:** Consultar y ajustar existencias de inventario por sucursal — *Actor: Administrador / Cajero*
+* **CU-07:** Administrar prendas y variantes del catálogo — *Actor: Administrador de Empresa* [WEB]
+* **CU-08:** Controlar existencias de inventario por sucursal — *Actor: Administrador / Cajero* [WEB / MOVIL]
 
 ### PAQ-04: Operaciones Offline y Sincronización
-* **CU-09:** Descargar catálogo e inventario local (Cache PWA / SQLite) — *Actor: Cajero / Cliente*
-* **CU-10:** Registrar venta de contado offline — *Actor: Cajero*
-* **CU-11:** Registrar reserva de prendas offline — *Actor: Cajero / Cliente*
-* **CU-12:** Consultar lista de operaciones locales pendientes — *Actor: Cajero*
-* **CU-13:** Sincronizar cola de operaciones locales con backend — *Actor: Cajero / Sistema*
-* **CU-14:** Resolver conflictos de stock post-sincronización — *Actor: Administrador de Empresa / Sistema*
+* **CU-09:** Habilitar catálogo y existencias fuera de línea — *Actor: Cajero / Cliente* [WEB / MOVIL]
+* **CU-10:** Registrar venta de contado fuera de línea — *Actor: Cajero* [WEB / MOVIL]
+* **CU-11:** Registrar reserva de prendas fuera de línea — *Actor: Cajero / Cliente* [WEB / MOVIL]
+* **CU-12:** Monitorear operaciones pendientes de sincronización — *Actor: Cajero* [WEB / MOVIL]
+* **CU-13:** Sincronizar transacciones locales con la nube — *Actor: Cajero / Sistema* [WEB / MOVIL]
+* **CU-14:** Conciliar discrepancias de inventario post-sincronización — *Actor: Administrador de Empresa / Sistema* [WEB]
 
 ### PAQ-05: Políticas Postventa
-* **CU-15:** Registrar cambio de prendas de vestir — *Actor: Cajero*
+* **CU-15:** Tramitar cambio de prendas de vestir — *Actor: Cajero / Cliente* [WEB / MOVIL]
 
 ### PAQ-06: Analítica con Machine Learning
-* **CU-16:** Generar dataset sintético para entrenamiento — *Actor: Sistema*
-* **CU-17:** Entrenar y consultar modelo supervisado (predicción de demanda) — *Actor: Administrador / Sistema*
-* **CU-18:** Entrenar y consultar modelo no supervisado (segmentación / anomalías) — *Actor: Administrador / Sistema*
-* **CU-19:** Visualizar dashboard analítico de negocio — *Actor: Administrador de Empresa*
+* **CU-16:** Simular histórico de ventas para calibración de modelos — *Actor: Administrador / Sistema* [WEB]
+* **CU-17:** Pronosticar demanda futura de prendas por sucursal — *Actor: Administrador / Sistema* [WEB]
+* **CU-18:** Segmentar clientes por comportamiento de compra (RFM) — *Actor: Administrador / Sistema* [WEB]
+* **CU-19:** Visualizar tablero analítico de rendimiento comercial — *Actor: Administrador de Empresa* [WEB]
 
 ### PAQ-07: Reportes Generativos con IA
-* **CU-20:** Consultar reporte por lenguaje natural (texto o voz) — *Actor: Administrador de Empresa*
-* **CU-21:** Visualizar reporte dinámico en tabla o gráfico — *Actor: Administrador de Empresa*
-* **CU-22:** Exportar reporte generado a PDF o Excel — *Actor: Administrador de Empresa*
+* **CU-20:** Generar reporte analítico asistido por IA (Texto / Voz) — *Actor: Administrador de Empresa* [WEB / MOVIL]
+* **CU-21:** Explorar resultados analíticos en tablas y gráficos dinámicos — *Actor: Administrador de Empresa* [WEB]
+* **CU-22:** Exportar informes gerenciales a PDF y Excel — *Actor: Administrador de Empresa* [WEB]
 
 ---
 

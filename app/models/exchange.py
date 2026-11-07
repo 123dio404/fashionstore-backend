@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -29,6 +29,11 @@ class GarmentExchange(Base):
     new_stock_id: Mapped[int] = mapped_column("id_inventario_nuevo", ForeignKey("inventario.id", ondelete="RESTRICT"))
     quantity: Mapped[int] = mapped_column("cantidad", Integer, default=1, nullable=False)
     price_difference: Mapped[Decimal] = mapped_column("diferencia_precio", Numeric(12, 2), default=Decimal("0.00"), nullable=False)
+    difference_payment_status: Mapped[str] = mapped_column("estado_pago_diferencia", String(30), default="PAGADO", nullable=False)
+    push_notification_sent: Mapped[bool] = mapped_column("notificacion_push_enviada", Boolean, default=True, nullable=False)
+    push_notification_text: Mapped[str | None] = mapped_column("texto_notificacion_push", String(500), nullable=True)
+    refund_amount: Mapped[Decimal] = mapped_column("monto_reembolso", Numeric(12, 2), default=Decimal("0.00"), nullable=False)
+    refund_status: Mapped[str | None] = mapped_column("estado_reembolso", String(30), nullable=True)
     reason: Mapped[str] = mapped_column("motivo", String(255), default="Cambio de talla / modelo")
     user_id: Mapped[int | None] = mapped_column("id_usuario", ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column("fecha", DateTime(timezone=True), server_default=func.now(), nullable=False)

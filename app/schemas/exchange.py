@@ -21,6 +21,11 @@ class ExchangeResponse(ORMModel):
     new_stock_id: int
     quantity: int
     price_difference: Decimal
+    difference_payment_status: str = "PAGADO"
+    push_notification_sent: bool = True
+    push_notification_text: str | None = None
+    refund_amount: Decimal = Decimal("0.00")
+    refund_status: str | None = None
     reason: str
     created_at: datetime
     receipt_number: str | None = None

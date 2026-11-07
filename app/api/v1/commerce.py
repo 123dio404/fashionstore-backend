@@ -10,6 +10,8 @@ from app.schemas.commerce import (
     CartItemUpdate,
     CartResponse,
     CheckoutRequest,
+    CustomerDeliveryConfirmation,
+    DeliveryStatusUpdate,
     InvoiceResponse,
     PosSaleCreate,
     QrPaymentRequest,
@@ -252,4 +254,32 @@ def complete_reservation(
     Descuenta definitivamente el stock físico y completa la reserva.
     """
     sale = commerce_service.convert_reservation_to_sale(db, reservation_id, cashier_id=user.id)
+    return commerce_service.sale_response(db, sale)
+
+
+@router.patch('/sales/{sale_id}/delivery-status', response_model=SaleResponse, dependencies=[staff])
+def update_sale_delivery_status(
+    sale_id: int,
+    data: DeliveryStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    """
+    Actualiza el estado logístico de despacho de la venta (Pagado -> Por despachar -> Enviado -> Entregado).
+    Permitido para personal de administración, encargado o cajero.
+    """
+    sale = commerce_service.update_delivery_status(db, sale_id, data.delivery_status, data.notes)
+    return commerce_service.sale_response(db, sale)
+
+
+@router.post('/sales/{sale_id}/confirm-delivery', response_model=SaleResponse)
+def confirm_delivery_by_customer(
+    sale_id: int,
+    data: CustomerDeliveryConfirmation,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Permite al cliente final confirmar en su aplicación móvil o web la recepción conforme de la prenda entregada.
+    """
+    sale = commerce_service.confirm_customer_delivery(db, sale_id, user.id, data.notes)
     return commerce_service.sale_response(db, sale)

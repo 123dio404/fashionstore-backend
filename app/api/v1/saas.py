@@ -160,9 +160,21 @@ def change_plan(
     if not tenant:
         raise HTTPException(status_code=404, detail="Empresa no encontrada")
 
-    target_plan = db.scalar(select(Plan).where(func.lower(Plan.name) == data.plan_name.lower().strip()))
+    clean_name = data.plan_name.lower().strip()
+    if clean_name in ("basico", "básico"):
+        target_plan = db.scalar(select(Plan).where(Plan.name == "Básico"))
+    elif clean_name in ("profesional",):
+        target_plan = db.scalar(select(Plan).where(Plan.name == "Profesional"))
+    elif clean_name in ("empresarial",):
+        target_plan = db.scalar(select(Plan).where(Plan.name == "Empresarial"))
+    else:
+        target_plan = db.scalar(select(Plan).where(func.lower(Plan.name) == clean_name))
+
     if not target_plan:
-        raise HTTPException(status_code=404, detail=f"Plan '{data.plan_name}' no encontrado. Opciones: 'Básico', 'Profesional'")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Plan '{data.plan_name}' no encontrado. Opciones: 'Básico', 'Profesional', 'Empresarial'",
+        )
 
     # Validar límites de sucursales activas si se reduce de plan
     active_branches = db.scalar(
@@ -249,9 +261,21 @@ def create_tenant(
     if existing:
         raise HTTPException(status_code=409, detail="Ya existe una empresa con ese nombre o slug")
 
-    plan = db.scalar(select(Plan).where(func.lower(Plan.name) == data.plan_name.lower().strip()))
+    clean_name = data.plan_name.lower().strip()
+    if clean_name in ("basico", "básico"):
+        plan = db.scalar(select(Plan).where(Plan.name == "Básico"))
+    elif clean_name in ("profesional",):
+        plan = db.scalar(select(Plan).where(Plan.name == "Profesional"))
+    elif clean_name in ("empresarial",):
+        plan = db.scalar(select(Plan).where(Plan.name == "Empresarial"))
+    else:
+        plan = db.scalar(select(Plan).where(func.lower(Plan.name) == clean_name))
+
     if not plan:
-        raise HTTPException(status_code=404, detail=f"Plan '{data.plan_name}' no encontrado")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Plan '{data.plan_name}' no encontrado. Opciones: 'Básico', 'Profesional', 'Empresarial'",
+        )
 
     # Crear Tenant
     now = datetime.now(timezone.utc)

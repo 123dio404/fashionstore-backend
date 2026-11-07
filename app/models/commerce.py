@@ -53,6 +53,9 @@ class Sale(Base):
     sale_date: Mapped[datetime] = mapped_column("fecha", DateTime(timezone=True), server_default=func.now(), nullable=False)
     total: Mapped[Decimal] = mapped_column("total", Numeric(12, 2), nullable=False)
     sale_type: Mapped[str] = mapped_column("tipo_venta", String(30), nullable=False)
+    delivery_status: Mapped[str] = mapped_column("estado_entrega", String(30), default="PAGADO", nullable=False)
+    customer_notes: Mapped[str | None] = mapped_column("notas_cliente", String(255), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column("fecha_entrega", DateTime(timezone=True), nullable=True)
 
     branch: Mapped["Branch"] = relationship()
     items: Mapped[list["SaleItem"]] = relationship(back_populates="sale", cascade="all, delete-orphan")
