@@ -16,11 +16,13 @@ from app.api.v1 import (
     saas,
     suppliers,
     sync,
+    uploads,
     users,
 )
 
 api_router = APIRouter(prefix='/api/v1')
 api_router.include_router(auth.router)
+api_router.include_router(uploads.router)
 api_router.include_router(saas.router)
 api_router.include_router(sync.router)
 api_router.include_router(exchanges.router)

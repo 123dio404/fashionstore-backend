@@ -63,11 +63,16 @@ def ensure_user(db, email: str, full_name: str, role_name: str, tenant_id: int |
     return user
 
 
-def ensure_category(db, name: str) -> Category:
-    cat = db.scalar(select(Category).where(Category.name == name))
+def ensure_category(db, name: str, tenant_id: int | None = None) -> Category:
+    cat = db.scalar(select(Category).where(Category.name == name, Category.tenant_id == tenant_id))
     if not cat:
-        cat = Category(name=name)
-        db.add(cat)
+        # Si existe huérfana sin tenant, asignarla
+        cat = db.scalar(select(Category).where(Category.name == name, Category.tenant_id.is_(None)))
+        if cat:
+            cat.tenant_id = tenant_id
+        else:
+            cat = Category(name=name, tenant_id=tenant_id)
+            db.add(cat)
         db.flush()
     return cat
 
@@ -88,6 +93,46 @@ def ensure_size(db, name: str) -> Size:
         db.add(s)
         db.flush()
     return s
+
+
+PRODUCT_IMAGES = {
+    # Moda Urbana S.A.
+    "Camisa Oxford Streetwear": "https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=800&auto=format&fit=crop&q=80",
+    "Blazer Oversize Lana": "https://images.unsplash.com/photo-1613915617430-8ab0fd7c6baf?w=800&auto=format&fit=crop&q=80",
+    "Blazer Estructurado Street": "https://images.unsplash.com/photo-1629511565591-a1d494ad6c58?w=800&auto=format&fit=crop&q=80",
+    "Chaqueta Denim Retro": "https://images.unsplash.com/photo-1603189343302-e603f7add05a?w=800&auto=format&fit=crop&q=80",
+    "Sneakers Clásicas Urbanas": "https://images.unsplash.com/photo-1605523741177-cd660595c2cf?w=800&auto=format&fit=crop&q=80",
+    "Sneakers Blancas Chunky": "https://images.unsplash.com/photo-1552346154-21d32810aba3?w=800&auto=format&fit=crop&q=80",
+    "Vestido Midi Fluido": "https://images.unsplash.com/photo-1664076458686-3449062080ac?w=800&auto=format&fit=crop&q=80",
+    "Vestido Midi Rojo Urbano": "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=80",
+    "Conjunto Punto Acanalado": "https://images.unsplash.com/photo-1645996830718-127f7e4f74fc?w=800&auto=format&fit=crop&q=80",
+    "Pantalón Cargo Urbano": "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=800&auto=format&fit=crop&q=80",
+    "Hoodie Gráfico Streetwear": "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=80",
+    "Remera Oversize Graphic Lab": "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=800&auto=format&fit=crop&q=80",
+    "Rompevientos Windbreaker Techwear": "https://images.unsplash.com/photo-1544441893-675973e31985?w=800&auto=format&fit=crop&q=80",
+    "Jogger Baggy Streetwear": "https://images.unsplash.com/photo-1552902865-b72c031ac5ea?w=800&auto=format&fit=crop&q=80",
+    "Gorra Urbana Trucker Edition": "https://images.unsplash.com/photo-1521369909029-2afed882baee?w=800&auto=format&fit=crop&q=80",
+
+    # Mundo Medias S.R.L.
+    "Medias Tobilleras Deportivas (Pack x3)": "https://images.unsplash.com/photo-1586350977771-b3b0abd50c82?w=800&auto=format&fit=crop&q=80",
+    "Medias de Compresión Graduada": "https://images.unsplash.com/photo-1582966772680-860e372bb558?w=800&auto=format&fit=crop&q=80",
+    "Medias Térmicas Polar de Invierno": "https://images.unsplash.com/photo-1646725582781-c09e1bcd431d?w=800&auto=format&fit=crop&q=80",
+    "Medias Invisibles Antideslizantes": "https://images.unsplash.com/photo-1585499583264-491df5142e83?w=800&auto=format&fit=crop&q=80",
+    "Pantis de Seda Fina Elegance": "https://images.unsplash.com/photo-1582966772680-860e372bb558?w=800&auto=format&fit=crop&q=80",
+    "Medias Ejecutivas Hilo de Escocia": "https://images.unsplash.com/photo-1608256246200-53e635b5b65f?w=800&auto=format&fit=crop&q=80",
+    "Calcetines Lana Merino Senderismo": "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=800&auto=format&fit=crop&q=80",
+    "Medias Bucaneras Canalé Algodón": "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&auto=format&fit=crop&q=80",
+
+    # Elegance Boutique S.R.L.
+    "Vestido de Gala Seda Royale": "https://images.unsplash.com/photo-1566174053879-31528523f8ae?w=800&auto=format&fit=crop&q=80",
+    "Traje Ejecutivo Italiano": "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=800&auto=format&fit=crop&q=80",
+    "Smoking Ceremonia Black Tie": "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=800&auto=format&fit=crop&q=80",
+    "Vestido Sirena Escote Corset": "https://images.unsplash.com/photo-1518895949257-7621c3c786d7?w=800&auto=format&fit=crop&q=80",
+    "Abrigo de Cachemira Imperial": "https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=800&auto=format&fit=crop&q=80",
+    "Blazer Doble Botonadura Sartorial": "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&auto=format&fit=crop&q=80",
+    "Vestido Midi Plisado Champagne": "https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=800&auto=format&fit=crop&q=80",
+    "Blusa de Seda Crepe Organza": "https://images.unsplash.com/photo-1551803091-e20673f15770?w=800&auto=format&fit=crop&q=80",
+}
 
 
 def seed_saas_data():
@@ -255,15 +300,38 @@ def seed_saas_data():
             'Vestido Midi Rojo': ('Vestido Midi Rojo Urbano', 'Urban Chic'),
             'Conjunto Punto Acanalado': ('Conjunto Punto Acanalado', 'StreetWear Lab'),
         }
+        cat_street = ensure_category(db, "Moda Urbana & Streetwear", tenant1.id)
+        cat_acc_urb = ensure_category(db, "Accesorios Urbanos", tenant1.id)
+        cat_calz_urb = ensure_category(db, "Calzado Urbano", tenant1.id)
+        cat_ropa_urb = ensure_category(db, "Ropa Casual", tenant1.id)
+
+        category_remapping_t1 = {
+            'Sneakers Clásicas Urbanas': cat_calz_urb,
+            'Sneakers Blancas Chunky': cat_calz_urb,
+            'Camisa Oxford Streetwear': cat_ropa_urb,
+            'Chaqueta Denim Retro': cat_ropa_urb,
+            'Pantalón Cargo Urbano': cat_ropa_urb,
+            'Blazer Oversize Lana': cat_street,
+            'Blazer Estructurado Street': cat_street,
+            'Vestido Midi Fluido': cat_street,
+            'Vestido Midi Rojo Urbano': cat_street,
+            'Conjunto Punto Acanalado': cat_street,
+            'Hoodie Gráfico Streetwear': cat_street,
+            'Remera Oversize Graphic Lab': cat_street,
+            'Rompevientos Windbreaker Techwear': cat_street,
+            'Jogger Baggy Streetwear': cat_street,
+            'Gorra Urbana Trucker Edition': cat_acc_urb,
+        }
         for p in db.scalars(select(Product).where(Product.tenant_id == tenant1.id)).all():
             if p.name in brand_map:
                 p.name, p.brand = brand_map[p.name]
             elif p.brand == 'FashionStore':
                 p.brand = 'Urban Style Co.'
+            if p.name in category_remapping_t1:
+                p.category_id = category_remapping_t1[p.name].id
+            if p.name in PRODUCT_IMAGES:
+                p.image_url = PRODUCT_IMAGES[p.name]
         db.flush()
-
-        cat_street = ensure_category(db, "Moda Urbana & Streetwear")
-        cat_acc_urb = ensure_category(db, "Accesorios Urbanos")
         streetwear_new = [
             {
                 "name": "Remera Oversize Graphic Lab",
@@ -319,10 +387,14 @@ def seed_saas_data():
                     name=s_item["name"],
                     brand=s_item["brand"],
                     price=s_item["price"],
+                    image_url=PRODUCT_IMAGES.get(s_item["name"]),
                     is_active=True,
                 )
                 db.add(p_st)
                 db.flush()
+            else:
+                p_st.category_id = s_item["category"].id
+                p_st.image_url = PRODUCT_IMAGES.get(s_item["name"])
 
             v_st = db.scalar(select(ProductVariant).where(ProductVariant.codigo == s_item["code"]))
             if not v_st:
@@ -422,9 +494,9 @@ def seed_saas_data():
         db.flush()
 
         # Categorías especializadas de Medias
-        cat_dep = ensure_category(db, "Medias Deportivas")
-        cat_cla = ensure_category(db, "Medias Clásicas y Ejecutivas")
-        cat_ter = ensure_category(db, "Medias Térmicas y Especiales")
+        cat_dep = ensure_category(db, "Medias Deportivas", tenant2.id)
+        cat_cla = ensure_category(db, "Medias Clásicas y Ejecutivas", tenant2.id)
+        cat_ter = ensure_category(db, "Medias Térmicas y Especiales", tenant2.id)
 
         # Colores y tallas
         col_blanco = ensure_color(db, "Blanco")
@@ -529,10 +601,14 @@ def seed_saas_data():
                     name=p_data["name"],
                     brand=p_data["brand"],
                     price=p_data["price"],
+                    image_url=PRODUCT_IMAGES.get(p_data["name"]),
                     is_active=True,
                 )
                 db.add(prod)
                 db.flush()
+            else:
+                prod.category_id = p_data["category"].id
+                prod.image_url = PRODUCT_IMAGES.get(p_data["name"])
 
             for var_data in p_data["variants"]:
                 variant = db.scalar(select(ProductVariant).where(ProductVariant.codigo == var_data["code"]))
@@ -673,9 +749,9 @@ def seed_saas_data():
         db.flush()
 
         # Productos de alta costura para Tenant 3
-        cat_alta_costura = ensure_category(db, "Alta Costura y Vestidos")
-        cat_sastreria = ensure_category(db, "Sastrería y Trajes")
-        cat_abrigos = ensure_category(db, "Abrigos y Tapados")
+        cat_alta_costura = ensure_category(db, "Alta Costura y Vestidos", tenant3.id)
+        cat_sastreria = ensure_category(db, "Sastrería y Trajes", tenant3.id)
+        cat_abrigos = ensure_category(db, "Abrigos y Tapados", tenant3.id)
 
         col_azul = ensure_color(db, "Azul")
         col_rojo = ensure_color(db, "Rojo")
@@ -782,10 +858,14 @@ def seed_saas_data():
                     name=item["name"],
                     brand=item["brand"],
                     price=item["price"],
+                    image_url=PRODUCT_IMAGES.get(item["name"]),
                     is_active=True,
                 )
                 db.add(p_obj)
                 db.flush()
+            else:
+                p_obj.category_id = item["category"].id
+                p_obj.image_url = PRODUCT_IMAGES.get(item["name"])
 
             var_obj = db.scalar(select(ProductVariant).where(ProductVariant.codigo == item["code"]))
             if not var_obj:

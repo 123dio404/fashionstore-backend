@@ -12,7 +12,7 @@ class ParameterUpdate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
 class CategoryResponse(ORMModel):
-    id: int; name: str
+    id: int; name: str; tenant_id: int | None = None
 class SeasonResponse(ORMModel):
     id: int; name: str; start_date: date | None; end_date: date | None
 class SizeResponse(ORMModel):
@@ -54,6 +54,7 @@ class ProductCreate(BaseModel):
     is_clearance: bool = Field(default=False, description="Flag de liquidación de fin de temporada")
     discount_percentage: Decimal = Field(default=Decimal("0.00"), ge=0, le=100, description="Porcentaje de descuento por liquidación")
     is_active: bool = True
+    image_url: str | None = Field(default=None, description="URL o ruta de la imagen de la prenda")
     model_3d_url: str | None = Field(default=None, max_length=500)
     model_3d_format: str | None = Field(default=None, pattern=r'^(glb|gltf)$')
     technical_metadata: str | None = None
@@ -72,6 +73,7 @@ class ProductUpdate(BaseModel):
     is_clearance: bool | None = None
     discount_percentage: Decimal | None = Field(default=None, ge=0, le=100)
     is_active: bool | None = None
+    image_url: str | None = Field(default=None, description="URL o ruta de la imagen de la prenda")
     model_3d_url: str | None = Field(default=None, max_length=500)
     model_3d_format: str | None = Field(default=None, pattern=r'^(glb|gltf)$')
     technical_metadata: str | None = None
@@ -94,5 +96,6 @@ class ProductResponse(ORMModel):
     is_active: bool
     category_name: str | None = None
     tenant_id: int | None = None
+    image_url: str | None = None
     model_3d_url: str | None = None; model_3d_format: str | None = None; technical_metadata: str | None = None
     variants: list[VariantResponse] = []

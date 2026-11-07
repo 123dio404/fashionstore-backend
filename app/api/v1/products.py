@@ -14,20 +14,78 @@ router = APIRouter(tags=['products'])
 editor = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO))
 
 @router.get('/parameters/categories', response_model=list[CategoryResponse])
-def list_categories(db: Session = Depends(get_db)): return list(db.scalars(select(Category).order_by(Category.name)).all())
-@router.post('/parameters/categories', response_model=CategoryResponse, status_code=201, dependencies=[editor])
-def add_category(data: ParameterCreate, db: Session = Depends(get_db)):
-    obj=Category(name=data.name); db.add(obj)
-    try: db.commit(); db.refresh(obj)
-    except IntegrityError: db.rollback(); raise HTTPException(409,'Category already exists')
+def list_categories(
+    tenant_id: int | None = None,
+    current: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """Lista categorías disponibles. Si el usuario pertenece a una empresa, filtra por su tenant."""
+    query = select(Category).order_by(Category.name)
+    target_tenant = None
+    if current is not None and current.role != Role.SUPERADMIN and current.tenant_id is not None:
+        target_tenant = current.tenant_id
+    elif tenant_id is not None:
+        target_tenant = tenant_id
+
+    if target_tenant is not None:
+        query = query.where(Category.tenant_id == target_tenant)
+    return list(db.scalars(query).all())
+
+
+@router.post('/parameters/categories', response_model=CategoryResponse, status_code=201)
+def add_category(
+    data: ParameterCreate,
+    current: User = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO)),
+    db: Session = Depends(get_db),
+):
+    obj = Category(name=data.name, tenant_id=current.tenant_id)
+    db.add(obj)
+    try:
+        db.commit()
+        db.refresh(obj)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, 'Category already exists')
     return obj
-@router.patch('/parameters/categories/{item_id}', response_model=CategoryResponse, dependencies=[editor])
-def edit_category(item_id: int, data: ParameterUpdate, db: Session = Depends(get_db)):
-    obj=db.get(Category,item_id)
-    if not obj: raise HTTPException(404,'Category not found')
-    for k,v in data.model_dump(exclude_unset=True).items():
-        if k == 'name': setattr(obj,k,v)
-    db.commit(); db.refresh(obj); return obj
+
+
+@router.patch('/parameters/categories/{item_id}', response_model=CategoryResponse)
+def edit_category(
+    item_id: int,
+    data: ParameterUpdate,
+    current: User = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO)),
+    db: Session = Depends(get_db),
+):
+    obj = db.get(Category, item_id)
+    if not obj:
+        raise HTTPException(404, 'Category not found')
+    if current.role != Role.SUPERADMIN and current.tenant_id is not None and obj.tenant_id != current.tenant_id:
+        raise HTTPException(403, 'No autorizado para modificar esta categoría')
+    for k, v in data.model_dump(exclude_unset=True).items():
+        if k == 'name':
+            setattr(obj, k, v)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+@router.delete('/parameters/categories/{item_id}', status_code=204)
+def delete_category(
+    item_id: int,
+    current: User = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO)),
+    db: Session = Depends(get_db),
+):
+    obj = db.get(Category, item_id)
+    if not obj:
+        raise HTTPException(404, 'Category not found')
+    if current.role != Role.SUPERADMIN and current.tenant_id is not None and obj.tenant_id != current.tenant_id:
+        raise HTTPException(403, 'No autorizado para eliminar esta categoría')
+    try:
+        db.delete(obj)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, 'Category is in use')
 
 @router.get('/parameters/seasons', response_model=list[SeasonResponse])
 def list_seasons(db: Session = Depends(get_db)): return list(db.scalars(select(Season).order_by(Season.name)).all())
@@ -41,17 +99,7 @@ def add_season(data: ParameterCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.delete('/parameters/categories/{item_id}', status_code=204, dependencies=[editor])
-def delete_category(item_id: int, db: Session = Depends(get_db)):
-    obj = db.get(Category, item_id)
-    if not obj:
-        raise HTTPException(404, 'Category not found')
-    try:
-        db.delete(obj)
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(409, 'Category is in use')
+
 @router.patch('/parameters/seasons/{item_id}', response_model=SeasonResponse, dependencies=[editor])
 def edit_season(item_id: int, data: ParameterUpdate, db: Session = Depends(get_db)):
     obj=db.get(Season,item_id)

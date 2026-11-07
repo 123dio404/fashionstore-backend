@@ -129,6 +129,17 @@ DEMO_CATALOG: list[tuple[str, str, str, str, list[str], list[str]]] = [
     ("Sneakers Blancas", "Adidas", "Calzado", "59.99", ["38", "39", "40"], ["Blanco", "Gris"]),
 ]
 
+DEMO_IMAGES = {
+    "Blazer Oversize Lana": "https://images.unsplash.com/photo-1613915617430-8ab0fd7c6baf?w=800&auto=format&fit=crop&q=80",
+    "Vestido Midi Fluido": "https://images.unsplash.com/photo-1664076458686-3449062080ac?w=800&auto=format&fit=crop&q=80",
+    "Conjunto Punto Acanalado": "https://images.unsplash.com/photo-1645996830718-127f7e4f74fc?w=800&auto=format&fit=crop&q=80",
+    "Blazer Estructurado": "https://images.unsplash.com/photo-1629511565591-a1d494ad6c58?w=800&auto=format&fit=crop&q=80",
+    "Sneakers Clásicas": "https://images.unsplash.com/photo-1605523741177-cd660595c2cf?w=800&auto=format&fit=crop&q=80",
+    "Chaqueta Denim": "https://images.unsplash.com/photo-1603189343302-e603f7add05a?w=800&auto=format&fit=crop&q=80",
+    "Vestido Midi Rojo": "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=80",
+    "Sneakers Blancas": "https://images.unsplash.com/photo-1552346154-21d32810aba3?w=800&auto=format&fit=crop&q=80",
+}
+
 # Stock físico inicial por sucursal (CU21: existencias por sucursal).
 DEMO_BRANCH_STOCK = {"Sucursal Centro": 6, "Sucursal Norte": 3, "Sucursal Sur": 9}
 DEMO_MIN_STOCK = 2
@@ -227,6 +238,8 @@ def ensure_demo_catalog() -> list[str]:
             product.is_active = True
             product.model_3d_url = model_url
             product.model_3d_format = model_format
+            if not product.image_url and name in DEMO_IMAGES:
+                product.image_url = DEMO_IMAGES[name]
 
             for size_name in sizes:
                 size = db.scalar(select(Size).where(Size.name == size_name))
