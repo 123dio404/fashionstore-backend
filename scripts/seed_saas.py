@@ -164,6 +164,21 @@ def seed_saas_data():
             db.add(city)
             db.flush()
 
+        # Colores y tallas base del sistema
+        col_blanco = ensure_color(db, "Blanco")
+        col_negro = ensure_color(db, "Negro")
+        col_gris = ensure_color(db, "Gris")
+        col_azul = ensure_color(db, "Azul")
+        col_rojo = ensure_color(db, "Rojo")
+        col_camel = ensure_color(db, "Camel")
+        col_dorado = ensure_color(db, "Dorado")
+        col_piel = ensure_color(db, "Piel")
+
+        size_s = ensure_size(db, "S")
+        size_m = ensure_size(db, "M")
+        size_l = ensure_size(db, "L")
+        size_xl = ensure_size(db, "XL")
+
         # ─────────────────────────────────────────────────────────────
         # 4. TENANT 1: Moda Urbana S.A. (Plan Básico)
         # ─────────────────────────────────────────────────────────────
@@ -245,6 +260,89 @@ def seed_saas_data():
                 p.name, p.brand = brand_map[p.name]
             elif p.brand == 'FashionStore':
                 p.brand = 'Urban Style Co.'
+        db.flush()
+
+        cat_street = ensure_category(db, "Moda Urbana & Streetwear")
+        cat_acc_urb = ensure_category(db, "Accesorios Urbanos")
+        streetwear_new = [
+            {
+                "name": "Remera Oversize Graphic Lab",
+                "brand": "StreetWear Lab",
+                "category": cat_street,
+                "price": Decimal("35.00"),
+                "code": "URB-REM-BLK-L",
+                "color": col_negro,
+                "size": size_l,
+                "stock_b1": 25,
+                "stock_b2": 15,
+            },
+            {
+                "name": "Rompevientos Windbreaker Techwear",
+                "brand": "Metro Denim",
+                "category": cat_street,
+                "price": Decimal("75.00"),
+                "code": "URB-WIND-GRY-M",
+                "color": col_gris,
+                "size": size_m,
+                "stock_b1": 18,
+                "stock_b2": 12,
+            },
+            {
+                "name": "Jogger Baggy Streetwear",
+                "brand": "StreetWear Lab",
+                "category": cat_street,
+                "price": Decimal("52.00"),
+                "code": "URB-JOG-BLK-M",
+                "color": col_negro,
+                "size": size_m,
+                "stock_b1": 20,
+                "stock_b2": 14,
+            },
+            {
+                "name": "Gorra Urbana Trucker Edition",
+                "brand": "Urban Style Co.",
+                "category": cat_acc_urb,
+                "price": Decimal("28.00"),
+                "code": "URB-CAP-BLK-U",
+                "color": col_negro,
+                "size": size_m,
+                "stock_b1": 30,
+                "stock_b2": 20,
+            },
+        ]
+        for s_item in streetwear_new:
+            p_st = db.scalar(select(Product).where(Product.tenant_id == tenant1.id, Product.name == s_item["name"]))
+            if not p_st:
+                p_st = Product(
+                    tenant_id=tenant1.id,
+                    category_id=s_item["category"].id,
+                    name=s_item["name"],
+                    brand=s_item["brand"],
+                    price=s_item["price"],
+                    is_active=True,
+                )
+                db.add(p_st)
+                db.flush()
+
+            v_st = db.scalar(select(ProductVariant).where(ProductVariant.codigo == s_item["code"]))
+            if not v_st:
+                v_st = ProductVariant(
+                    product_id=p_st.id,
+                    codigo=s_item["code"],
+                    color_id=s_item["color"].id,
+                    size_id=s_item["size"].id,
+                    price=s_item["price"],
+                    is_active=True,
+                )
+                db.add(v_st)
+                db.flush()
+
+            st1 = db.scalar(select(Stock).where(Stock.branch_id == b1.id, Stock.variant_id == v_st.id))
+            if not st1:
+                db.add(Stock(branch_id=b1.id, variant_id=v_st.id, size_id=s_item["size"].id, physical_stock=s_item["stock_b1"], reserved_stock=0, min_stock=5))
+            st2 = db.scalar(select(Stock).where(Stock.branch_id == b2.id, Stock.variant_id == v_st.id))
+            if not st2:
+                db.add(Stock(branch_id=b2.id, variant_id=v_st.id, size_id=s_item["size"].id, physical_stock=s_item["stock_b2"], reserved_stock=0, min_stock=3))
         db.flush()
 
         # ─────────────────────────────────────────────────────────────
@@ -388,6 +486,36 @@ def seed_saas_data():
                 "variants": [
                     {"code": "MED-PANT-BLK-M", "color": col_negro, "size": size_m},
                     {"code": "MED-PANT-SKN-M", "color": col_piel, "size": size_m},
+                ],
+            },
+            {
+                "name": "Medias Ejecutivas Hilo de Escocia",
+                "category": cat_cla,
+                "brand": "SilkTouch",
+                "price": Decimal("40.00"),
+                "variants": [
+                    {"code": "MED-EJEC-BLK-M", "color": col_negro, "size": size_m},
+                    {"code": "MED-EJEC-GRY-L", "color": col_gris, "size": size_l},
+                ],
+            },
+            {
+                "name": "Calcetines Lana Merino Senderismo",
+                "category": cat_ter,
+                "brand": "WinterWarm",
+                "price": Decimal("55.00"),
+                "variants": [
+                    {"code": "MED-MERI-GRY-M", "color": col_gris, "size": size_m},
+                    {"code": "MED-MERI-BLK-L", "color": col_negro, "size": size_l},
+                ],
+            },
+            {
+                "name": "Medias Bucaneras Canalé Algodón",
+                "category": cat_dep,
+                "brand": "Mundo Medias Casual",
+                "price": Decimal("38.00"),
+                "variants": [
+                    {"code": "MED-BUCA-BLK-M", "color": col_negro, "size": size_m},
+                    {"code": "MED-BUCA-WHT-S", "color": col_blanco, "size": size_s},
                 ],
             },
         ]
@@ -545,96 +673,159 @@ def seed_saas_data():
         db.flush()
 
         # Productos de alta costura para Tenant 3
-        cat_damas = db.scalar(select(Category).where(Category.name.ilike("%dama%"))) or ensure_category(db, "Vestidos y Alta Costura")
+        cat_alta_costura = ensure_category(db, "Alta Costura y Vestidos")
+        cat_sastreria = ensure_category(db, "Sastrería y Trajes")
+        cat_abrigos = ensure_category(db, "Abrigos y Tapados")
 
-        p_elegance = db.scalar(select(Product).where(Product.tenant_id == tenant3.id, Product.name == "Vestido de Gala Seda Royale"))
-        if not p_elegance:
-            p_elegance = Product(
-                tenant_id=tenant3.id,
-                category_id=cat_damas.id,
-                name="Vestido de Gala Seda Royale",
-                brand="Elegance Signature",
-                price=Decimal("450.00"),
-                is_active=True,
-            )
-            db.add(p_elegance)
-            db.flush()
+        col_azul = ensure_color(db, "Azul")
+        col_rojo = ensure_color(db, "Rojo")
+        col_camel = ensure_color(db, "Camel")
+        col_dorado = ensure_color(db, "Dorado")
 
-            var1 = ProductVariant(
-                product_id=p_elegance.id,
-                codigo="ELG-DRS-BLK-M",
-                color_id=col_negro.id,
-                size_id=size_m.id,
-                price=Decimal("450.00"),
-                is_active=True,
-            )
-            db.add(var1)
-            db.flush()
+        elegance_catalog = [
+            {
+                "name": "Vestido de Gala Seda Royale",
+                "brand": "Elegance Signature",
+                "category": cat_alta_costura,
+                "price": Decimal("450.00"),
+                "code": "ELG-DRS-BLK-M",
+                "color": col_negro,
+                "size": size_m,
+                "stock_b3": 15,
+                "stock_b4": 10,
+            },
+            {
+                "name": "Traje Ejecutivo Italiano",
+                "brand": "Elegance Sartoria",
+                "category": cat_sastreria,
+                "price": Decimal("680.00"),
+                "code": "ELG-SUIT-BLU-L",
+                "color": col_azul,
+                "size": size_l,
+                "stock_b3": 8,
+                "stock_b4": 2, # Bajo stock para reporte analítico
+            },
+            {
+                "name": "Smoking Ceremonia Black Tie",
+                "brand": "Elegance Sartoria",
+                "category": cat_sastreria,
+                "price": Decimal("550.00"),
+                "code": "ELG-SMOK-BLK-L",
+                "color": col_negro,
+                "size": size_l,
+                "stock_b3": 12,
+                "stock_b4": 6,
+            },
+            {
+                "name": "Vestido Sirena Escote Corset",
+                "brand": "Elegance Signature",
+                "category": cat_alta_costura,
+                "price": Decimal("520.00"),
+                "code": "ELG-SIRN-RED-M",
+                "color": col_rojo,
+                "size": size_m,
+                "stock_b3": 9,
+                "stock_b4": 7,
+            },
+            {
+                "name": "Abrigo de Cachemira Imperial",
+                "brand": "Elegance Sartoria",
+                "category": cat_abrigos,
+                "price": Decimal("480.00"),
+                "code": "ELG-COAT-CAM-M",
+                "color": col_camel,
+                "size": size_m,
+                "stock_b3": 7,
+                "stock_b4": 5,
+            },
+            {
+                "name": "Blazer Doble Botonadura Sartorial",
+                "brand": "Elegance Sartoria",
+                "category": cat_sastreria,
+                "price": Decimal("390.00"),
+                "code": "ELG-BLAZ-GRY-L",
+                "color": col_gris,
+                "size": size_l,
+                "stock_b3": 11,
+                "stock_b4": 8,
+            },
+            {
+                "name": "Vestido Midi Plisado Champagne",
+                "brand": "Elegance Signature",
+                "category": cat_alta_costura,
+                "price": Decimal("380.00"),
+                "code": "ELG-PLIS-GLD-S",
+                "color": col_dorado,
+                "size": size_s,
+                "stock_b3": 14,
+                "stock_b4": 9,
+            },
+            {
+                "name": "Blusa de Seda Crepe Organza",
+                "brand": "Elegance Atelier",
+                "category": cat_alta_costura,
+                "price": Decimal("210.00"),
+                "code": "ELG-BLUS-WHT-S",
+                "color": col_blanco,
+                "size": size_s,
+                "stock_b3": 18,
+                "stock_b4": 12,
+            },
+        ]
 
-            stock_elegance = Stock(
-                branch_id=b3.id,
-                variant_id=var1.id,
-                size_id=size_m.id,
-                physical_stock=15,
-                reserved_stock=2,
-                min_stock=3,
-            )
-            db.add(stock_elegance)
-            stock_elegance_b4 = Stock(
-                branch_id=b4.id,
-                variant_id=var1.id,
-                size_id=size_m.id,
-                physical_stock=10,
-                reserved_stock=0,
-                min_stock=2,
-            )
-            db.add(stock_elegance_b4)
+        for item in elegance_catalog:
+            p_obj = db.scalar(select(Product).where(Product.tenant_id == tenant3.id, Product.name == item["name"]))
+            if not p_obj:
+                p_obj = Product(
+                    tenant_id=tenant3.id,
+                    category_id=item["category"].id,
+                    name=item["name"],
+                    brand=item["brand"],
+                    price=item["price"],
+                    is_active=True,
+                )
+                db.add(p_obj)
+                db.flush()
 
-        # Producto 2: Traje Ejecutivo Italiano (con bajo stock para Reporte 4)
-        p_traje = db.scalar(select(Product).where(Product.tenant_id == tenant3.id, Product.name == "Traje Ejecutivo Italiano"))
-        if not p_traje:
-            p_traje = Product(
-                tenant_id=tenant3.id,
-                category_id=cat_damas.id,
-                name="Traje Ejecutivo Italiano",
-                brand="Elegance Sartoria",
-                price=Decimal("680.00"),
-                is_active=True,
-            )
-            db.add(p_traje)
-            db.flush()
+            var_obj = db.scalar(select(ProductVariant).where(ProductVariant.codigo == item["code"]))
+            if not var_obj:
+                var_obj = ProductVariant(
+                    product_id=p_obj.id,
+                    codigo=item["code"],
+                    color_id=item["color"].id,
+                    size_id=item["size"].id,
+                    price=item["price"],
+                    is_active=True,
+                )
+                db.add(var_obj)
+                db.flush()
 
-            col_azul = ensure_color(db, "Azul")
-            var2 = ProductVariant(
-                product_id=p_traje.id,
-                codigo="ELG-SUIT-BLU-L",
-                color_id=col_azul.id,
-                size_id=size_l.id,
-                price=Decimal("680.00"),
-                is_active=True,
-            )
-            db.add(var2)
-            db.flush()
+            stk_3 = db.scalar(select(Stock).where(Stock.branch_id == b3.id, Stock.variant_id == var_obj.id))
+            if not stk_3:
+                db.add(
+                    Stock(
+                        branch_id=b3.id,
+                        variant_id=var_obj.id,
+                        size_id=item["size"].id,
+                        physical_stock=item["stock_b3"],
+                        reserved_stock=1,
+                        min_stock=3,
+                    )
+                )
 
-            stock_critico = Stock(
-                branch_id=b4.id,
-                variant_id=var2.id,
-                size_id=size_l.id,
-                physical_stock=2,
-                reserved_stock=0,
-                min_stock=5,
-            )
-            db.add(stock_critico)
-            stock_traje_b3 = Stock(
-                branch_id=b3.id,
-                variant_id=var2.id,
-                size_id=size_l.id,
-                physical_stock=8,
-                reserved_stock=0,
-                min_stock=2,
-            )
-            db.add(stock_traje_b3)
-            db.flush()
+            stk_4 = db.scalar(select(Stock).where(Stock.branch_id == b4.id, Stock.variant_id == var_obj.id))
+            if not stk_4:
+                db.add(
+                    Stock(
+                        branch_id=b4.id,
+                        variant_id=var_obj.id,
+                        size_id=item["size"].id,
+                        physical_stock=item["stock_b4"],
+                        reserved_stock=0,
+                        min_stock=5 if item["stock_b4"] < 5 else 2,
+                    )
+                )
+        db.flush()
 
         # Siembra de ventas demo para Tenant 3
         ventas_existentes = db.scalar(select(func.count(Sale.id)).where(Sale.tenant_id == tenant3.id)) or 0
