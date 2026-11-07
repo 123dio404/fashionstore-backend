@@ -34,10 +34,16 @@ def register_user(db: Session, data: RegisterRequest) -> User:
     return user
 
 
-def create_user(db: Session, data: UserCreate) -> User:
+def create_user(db: Session, data: UserCreate, tenant_id: int | None = None) -> User:
     email = normalize_email(data.email)
     if db.scalar(select(User).where(User.email == email)): raise HTTPException(status_code=409, detail='Email already registered')
-    user = User(email=email, full_name=data.full_name.strip(), password_hash=get_password_hash(data.password), is_active=data.is_active)
+    user = User(
+        email=email,
+        full_name=data.full_name.strip(),
+        password_hash=get_password_hash(data.password),
+        is_active=data.is_active,
+        tenant_id=tenant_id,
+    )
     user.roles = [get_role(db, data.role)]
     db.add(user)
     try: db.commit(); db.refresh(user)

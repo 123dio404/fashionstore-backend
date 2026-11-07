@@ -11,6 +11,8 @@ from app.models.branch import Branch
 from app.models.user import User, Rol, Role
 from app.schemas.saas import (
     PlanResponse,
+    PlanCreate,
+    PlanUpdate,
     SubscriptionResponse,
     TenantSummaryResponse,
     ChangePlanRequest,
@@ -22,9 +24,79 @@ router = APIRouter(prefix="/saas", tags=["saas"])
 
 
 @router.get("/plans", response_model=list[PlanResponse])
-def list_plans(db: Session = Depends(get_db)):
-    """Lista todos los planes de suscripción configurados en la plataforma (Básico, Profesional y Empresarial)."""
-    return db.scalars(select(Plan).where(Plan.is_active == True).order_by(Plan.monthly_price)).all()
+def list_plans(include_inactive: bool = False, db: Session = Depends(get_db)):
+    """Lista los planes de suscripción configurados. El panel SaaS puede pedir también los inactivos."""
+    query = select(Plan).order_by(Plan.monthly_price)
+    if not include_inactive:
+        query = query.where(Plan.is_active == True)
+    return db.scalars(query).all()
+
+
+@router.post("/plans", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
+def create_plan(
+    data: PlanCreate,
+    user: User = Depends(require_role(Role.SUPERADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Superadministrador: crea un nuevo plan comercial."""
+    if db.scalar(select(Plan).where(func.lower(Plan.name) == data.name.lower().strip())):
+        raise HTTPException(status_code=409, detail="Ya existe un plan con ese nombre")
+    plan = Plan(**data.model_dump())
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+@router.patch("/plans/{plan_id}", response_model=PlanResponse)
+def update_plan(
+    plan_id: int,
+    data: PlanUpdate,
+    user: User = Depends(require_role(Role.SUPERADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Superadministrador: edita límites, precio o disponibilidad de un plan."""
+    plan = db.get(Plan, plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+
+    values = data.model_dump(exclude_unset=True)
+    if "name" in values:
+        values["name"] = values["name"].strip()
+        duplicate = db.scalar(
+            select(Plan).where(
+                func.lower(Plan.name) == values["name"].lower(),
+                Plan.id != plan_id,
+            )
+        )
+        if duplicate:
+            raise HTTPException(status_code=409, detail="Ya existe un plan con ese nombre")
+
+    for key, value in values.items():
+        setattr(plan, key, value)
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+@router.delete("/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_plan(
+    plan_id: int,
+    user: User = Depends(require_role(Role.SUPERADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Superadministrador: elimina un plan que no tenga suscripciones asociadas."""
+    plan = db.get(Plan, plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    in_use = db.scalar(select(func.count(Subscription.id)).where(Subscription.plan_id == plan_id)) or 0
+    if in_use:
+        raise HTTPException(
+            status_code=409,
+            detail="El plan tiene suscripciones asociadas. Desactívelo en lugar de eliminarlo.",
+        )
+    db.delete(plan)
+    db.commit()
 
 
 @router.get("/my-subscription", response_model=TenantSummaryResponse)
@@ -75,7 +147,12 @@ def change_plan(
     Simulación administrativa de contratación y cambio de plan SaaS (RN-02).
     Si se solicita bajar a Plan Básico, valida que la empresa no supere las 2 sucursales activas.
     """
-    tenant_id = user.tenant_id
+    tenant_id = data.tenant_id or user.tenant_id
+    if data.tenant_id is not None and user.role != Role.SUPERADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo el Superadministrador puede cambiar el plan de otra empresa",
+        )
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Debe pertenecer a una empresa para cambiar de plan")
 

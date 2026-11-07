@@ -10,11 +10,11 @@ def _require(model, db: Session, object_id, label: str):
     if obj is None: raise HTTPException(status_code=404, detail=f'{label} not found')
     return obj
 
-def create_product(db: Session, data: ProductCreate) -> Product:
+def create_product(db: Session, data: ProductCreate, tenant_id: int | None = None) -> Product:
     _require(Category, db, data.category_id, 'Category')
     if data.season_id is not None: _require(Season, db, data.season_id, 'Season')
     if db.scalar(select(Product).where(Product.name == data.name)): raise HTTPException(409, 'Product already exists')
-    product = Product(**data.model_dump(exclude={'variants'}))
+    product = Product(**data.model_dump(exclude={'variants'}), tenant_id=tenant_id)
     for item in data.variants:
         _require(Size, db, item.size_id, 'Size'); _require(Color, db, item.color_id, 'Color')
         product.variants.append(ProductVariant(**item.model_dump()))

@@ -8,7 +8,7 @@ from app.core.security import decode_access_token
 from app.models.user import Role, User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/api/v1/auth/login')
-oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl='/api/v1/auth/login', auto_error=False)
+oauth2_optional = OAuth2PasswordBearer(tokenUrl='/api/v1/auth/login', auto_error=False)
 
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
@@ -41,6 +41,30 @@ def require_role(*roles: Role | str) -> Callable:
 def get_current_tenant_id(current_user: User = Depends(get_current_user)) -> int | None:
     """Retorna el ID de la empresa a la que pertenece el usuario autenticado (o None si es Superadmin)."""
     return current_user.tenant_id
+
+
+def get_optional_current_user(
+    token: str | None = Depends(oauth2_optional),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Usuario autenticado si viene un token válido; None para endpoints públicos.
+
+    Permite que el catálogo sea público pero que, cuando un usuario de una
+    empresa consulta, solo vea los datos de su propio tenant.
+    """
+    if not token:
+        return None
+    try:
+        payload = decode_access_token(token)
+        subject = payload.get('sub')
+        if not subject:
+            return None
+        user = db.get(User, int(subject))
+    except (JWTError, ValueError, TypeError):
+        return None
+    if user is None or not user.is_active:
+        return None
+    return user
 
 def require_tenant(current_user: User = Depends(get_current_user)) -> int:
     """Exige que el usuario pertenezca a un tenant específico para operaciones comerciales o administrativas."""
