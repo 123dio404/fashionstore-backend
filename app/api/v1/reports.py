@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db, require_role
+from app.api.deps import get_current_user, get_db, require_role, require_tenant
 from app.models.user import Role, User
 from app.schemas.reporting import (
     AnalyticalQueryRequest, AnalyticalQueryResponse, DashboardResponse,
@@ -29,27 +29,46 @@ def purchase_history(
     target = client_id or user.id
     if client_id and client_id != user.id and user.role not in {Role.ADMINISTRADOR, Role.ENCARGADO}:
         raise HTTPException(403, "Insufficient permissions")
-    return service.purchase_history(db, target, start_date, end_date)
+    return service.purchase_history(db, target, start_date, end_date, user.tenant_id)
 
 
 @router.get("/sales", response_model=SalesReportResponse, dependencies=[sales_report_access])
-def sales_report(start_date: datetime | None = None, end_date: datetime | None = None, db: Session = Depends(get_db)):
-    return service.sales_report(db, start_date, end_date)
+def sales_report(
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    db: Session = Depends(get_db),
+    tenant_id: int = Depends(require_tenant),
+):
+    return service.sales_report(db, start_date, end_date, tenant_id)
 
 
 @router.get("/inventory", response_model=InventoryReportResponse, dependencies=[admin_report_access])
-def inventory_report(db: Session = Depends(get_db)):
-    return service.inventory_report(db)
+def inventory_report(
+    db: Session = Depends(get_db),
+    tenant_id: int = Depends(require_tenant),
+):
+    return service.inventory_report(db, tenant_id)
 
 
 @router.get("/executive", response_model=DashboardResponse, dependencies=[admin_report_access])
-def executive_dashboard(start_date: datetime | None = None, end_date: datetime | None = None, db: Session = Depends(get_db)):
-    return service.dashboard(db, start_date, end_date)
+def executive_dashboard(
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    db: Session = Depends(get_db),
+    tenant_id: int = Depends(require_tenant),
+):
+    return service.dashboard(db, start_date, end_date, tenant_id)
 
 
 @router.post("/analytical-query", response_model=AnalyticalQueryResponse, dependencies=[admin_report_access])
-def analytical_query(data: AnalyticalQueryRequest, db: Session = Depends(get_db)):
-    return service.analytical_query(db, data.query, data.client_id, data.start_date, data.end_date, data.audio)
+def analytical_query(
+    data: AnalyticalQueryRequest,
+    db: Session = Depends(get_db),
+    tenant_id: int = Depends(require_tenant),
+):
+    return service.analytical_query(
+        db, data.query, data.client_id, data.start_date, data.end_date, data.audio, tenant_id
+    )
 
 
 @router.post("/analytical-query/voice", response_model=SpeechAnalyticalQueryResponse, dependencies=[admin_report_access])
@@ -57,11 +76,12 @@ async def analytical_query_voice(
     audio: UploadFile = File(...),
     client_id: int | None = Form(None),
     db: Session = Depends(get_db),
+    tenant_id: int = Depends(require_tenant),
 ):
     transcript = get_speech_provider().transcribe(
         await audio.read(), audio.content_type or "audio/wav"
     )
     result = service.analytical_query(
-        db, transcript, client_id=client_id, audio={"filename": audio.filename}
+        db, transcript, client_id=client_id, audio={"filename": audio.filename}, tenant_id=tenant_id
     )
     return {"transcript": transcript, **result}
