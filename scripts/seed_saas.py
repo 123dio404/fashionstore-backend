@@ -329,7 +329,7 @@ def seed_saas_data():
                 p.brand = 'Urban Style Co.'
             if p.name in category_remapping_t1:
                 p.category_id = category_remapping_t1[p.name].id
-            if p.name in PRODUCT_IMAGES:
+            if p.name in PRODUCT_IMAGES and not p.image_url:
                 p.image_url = PRODUCT_IMAGES[p.name]
         db.flush()
         streetwear_new = [
@@ -394,7 +394,8 @@ def seed_saas_data():
                 db.flush()
             else:
                 p_st.category_id = s_item["category"].id
-                p_st.image_url = PRODUCT_IMAGES.get(s_item["name"])
+                if not p_st.image_url:
+                    p_st.image_url = PRODUCT_IMAGES.get(s_item["name"])
 
             v_st = db.scalar(select(ProductVariant).where(ProductVariant.codigo == s_item["code"]))
             if not v_st:
@@ -608,7 +609,8 @@ def seed_saas_data():
                 db.flush()
             else:
                 prod.category_id = p_data["category"].id
-                prod.image_url = PRODUCT_IMAGES.get(p_data["name"])
+                if not prod.image_url:
+                    prod.image_url = PRODUCT_IMAGES.get(p_data["name"])
 
             for var_data in p_data["variants"]:
                 variant = db.scalar(select(ProductVariant).where(ProductVariant.codigo == var_data["code"]))
@@ -865,7 +867,8 @@ def seed_saas_data():
                 db.flush()
             else:
                 p_obj.category_id = item["category"].id
-                p_obj.image_url = PRODUCT_IMAGES.get(item["name"])
+                if not p_obj.image_url:
+                    p_obj.image_url = PRODUCT_IMAGES.get(item["name"])
 
             var_obj = db.scalar(select(ProductVariant).where(ProductVariant.codigo == item["code"]))
             if not var_obj:
