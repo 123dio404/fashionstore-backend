@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db, require_role, get_current_tenant_id
+from app.api.deps import get_current_user, get_db, require_role
 from app.core.security import get_password_hash
 from app.models.tenant import Tenant, Plan, Subscription
 from app.models.branch import Branch
@@ -249,35 +249,45 @@ def list_tenants(
     return results
 
 
-@router.post("/tenants", response_model=TenantSummaryResponse, status_code=status.HTTP_201_CREATED)
-def create_tenant(
-    data: TenantCreateRequest,
-    user: User = Depends(require_role(Role.SUPERADMIN)),
-    db: Session = Depends(get_db),
-):
-    """Superadministrador: Da de alta una nueva empresa contratante y crea su usuario Administrador inicial."""
-    # Validar unicidad de slug o nombre
+def _resolve_plan(db: Session, plan_name: str, active_only: bool = False) -> Plan:
+    clean_name = plan_name.lower().strip()
+    if clean_name in ("basico", "básico"):
+        query = select(Plan).where(Plan.name == "Básico")
+    elif clean_name in ("profesional",):
+        query = select(Plan).where(Plan.name == "Profesional")
+    elif clean_name in ("empresarial",):
+        query = select(Plan).where(Plan.name == "Empresarial")
+    else:
+        query = select(Plan).where(func.lower(Plan.name) == clean_name)
+    if active_only:
+        query = query.where(Plan.is_active == True)
+    plan = db.scalar(query)
+    if not plan:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Plan '{plan_name}' no encontrado o no disponible. "
+                "Opciones: 'Básico', 'Profesional' o 'Empresarial'"
+            ),
+        )
+    return plan
+
+
+def _provision_tenant(
+    db: Session, data: TenantCreateRequest, active_only: bool = False
+) -> TenantSummaryResponse:
+    """Crea empresa + suscripción + usuario administrador inicial (alta compartida)."""
     existing = db.scalar(select(Tenant).where((Tenant.slug == data.slug) | (Tenant.name == data.name)))
     if existing:
         raise HTTPException(status_code=409, detail="Ya existe una empresa con ese nombre o slug")
 
-    clean_name = data.plan_name.lower().strip()
-    if clean_name in ("basico", "básico"):
-        plan = db.scalar(select(Plan).where(Plan.name == "Básico"))
-    elif clean_name in ("profesional",):
-        plan = db.scalar(select(Plan).where(Plan.name == "Profesional"))
-    elif clean_name in ("empresarial",):
-        plan = db.scalar(select(Plan).where(Plan.name == "Empresarial"))
-    else:
-        plan = db.scalar(select(Plan).where(func.lower(Plan.name) == clean_name))
+    plan = _resolve_plan(db, data.plan_name, active_only=active_only)
 
-    if not plan:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Plan '{data.plan_name}' no encontrado. Opciones: 'Básico', 'Profesional', 'Empresarial'",
-        )
+    norm_email = normalize_email(data.admin_email)
+    existing_user = db.scalar(select(User).where(User.email == norm_email))
+    if existing_user:
+        raise HTTPException(status_code=409, detail="El correo del administrador ya está registrado")
 
-    # Crear Tenant
     now = datetime.now(timezone.utc)
     new_tenant = Tenant(
         name=data.name,
@@ -288,7 +298,6 @@ def create_tenant(
     db.add(new_tenant)
     db.flush()
 
-    # Crear Suscripción inicial
     sub = Subscription(
         tenant_id=new_tenant.id,
         plan_id=plan.id,
@@ -297,12 +306,6 @@ def create_tenant(
         status="Activa",
     )
     db.add(sub)
-
-    # Crear Usuario Administrador de la Empresa
-    norm_email = normalize_email(data.admin_email)
-    existing_user = db.scalar(select(User).where(User.email == norm_email))
-    if existing_user:
-        raise HTTPException(status_code=409, detail="El correo del administrador ya está registrado")
 
     admin_role = db.scalar(select(Rol).where(Rol.nombre == "Administrador"))
     admin_user = User(
@@ -329,3 +332,19 @@ def create_tenant(
         active_branches_count=0,
         subscription=sub,
     )
+
+
+@router.post("/tenants", response_model=TenantSummaryResponse, status_code=status.HTTP_201_CREATED)
+def create_tenant(
+    data: TenantCreateRequest,
+    user: User = Depends(require_role(Role.SUPERADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Superadministrador: Da de alta una nueva empresa contratante y crea su usuario Administrador inicial."""
+    return _provision_tenant(db, data)
+
+
+@router.post("/register-store", response_model=TenantSummaryResponse, status_code=status.HTTP_201_CREATED)
+def register_store(data: TenantCreateRequest, db: Session = Depends(get_db)):
+    """Autoservicio público: una tienda crea su empresa, suscripción y cuenta de administrador."""
+    return _provision_tenant(db, data, active_only=True)
