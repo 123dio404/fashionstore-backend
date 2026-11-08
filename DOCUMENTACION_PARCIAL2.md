@@ -240,8 +240,9 @@
 * **Web (Angular PWA):** Persistencia en **IndexedDB** para almacenar:
   * Catálogo descargado (productos, variantes y precios).
   * Inventario local conocido.
-  * Cola de transacciones locales pendientes (`sync_queue`).
-* **Móvil (Flutter):** Persistencia en **SQLite** (`sqflite`) con esquema réplica para catálogo y cola de transacciones locales.
+  * Cola de transacciones locales pendientes (`sync_queue`), incluyendo el tenant asociado.
+* **Móvil (Flutter):** Persistencia en **SQLite** (`sqflite`) con esquema réplica para catálogo y cola de transacciones locales, asociando cada operación al tenant y sucursal.
+* **PWA instalable:** El manifiesto declara iconos de 192×192 y 512×512; el Service Worker conserva el app shell y los recursos de mismo origen visitados, y usa `index.html` como fallback de navegación offline.
 
 ### 9.2 Protocolo de Sincronización e Idempotencia
 1. Cada transacción offline genera en el cliente un identificador universal único (**UUID v4**).
@@ -252,6 +253,7 @@
    * `CONFLICTO`: Discrepancia detectada (ej. stock central insuficiente).
 3. **Idempotencia (RNF05):** Si el servidor recibe una transacción con un UUID ya registrado previamente, no vuelve a decrementar el inventario ni a duplicar la venta; simplemente responde con la confirmación de la venta existente.
 4. **Resolución de Conflictos de Stock (RN-05):** Si el inventario central es insuficiente para cubrir la venta registrada offline, la transacción se almacena en estado `CONFLICTO`, generando una alerta de inventario y notificación al administrador para compensación administrativa.
+5. **Aislamiento de cola:** El cliente solo reintenta operaciones cuyo tenant coincide con la sesión activa. El `tenant_id` local sirve para asociar y filtrar la cola; la autorización real se valida en backend mediante la sesión y la pertenencia de la sucursal, nunca confiando en el valor enviado por el cliente.
 
 ---
 
