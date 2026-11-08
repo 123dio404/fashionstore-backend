@@ -45,6 +45,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 @router.post('/sales/{sale_id}/invoice', response_model=InvoiceResponse)
 def issue_invoice(sale_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     sale = commerce_service.get_sale(db, sale_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and sale.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Sale not found')
     if user.role not in PRIVILEGED and sale.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     return get_fiscal_provider().issue_invoice(sale=sale)
@@ -60,6 +62,8 @@ def download_invoice_pdf(
     el descargo del PDF coinciden con la respuesta JSON.
     """
     sale = commerce_service.get_sale(db, sale_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and sale.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Sale not found')
     if user.role not in PRIVILEGED and sale.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     invoice = get_fiscal_provider().issue_invoice(sale=sale)
@@ -76,6 +80,8 @@ def download_invoice_pdf(
 def send_sale_notification(sale_id: int, channel: str = "email",
                            user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     sale = commerce_service.get_sale(db, sale_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and sale.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Sale not found')
     if user.role not in PRIVILEGED and sale.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     payment = sale.payments[-1] if sale.payments else None
@@ -154,6 +160,8 @@ def sales_history(
 @router.get('/sales/{sale_id}', response_model=SaleResponse)
 def get_sale(sale_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     sale = commerce_service.get_sale(db, sale_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and sale.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Sale not found')
     if user.role not in PRIVILEGED and sale.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     return commerce_service.sale_response(db, sale)
@@ -162,6 +170,8 @@ def get_sale(sale_id: int, user: User = Depends(get_current_user), db: Session =
 @router.get('/sales/{sale_id}/receipt', response_model=ReceiptResponse)
 def sale_receipt(sale_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     sale = commerce_service.get_sale(db, sale_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and sale.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Sale not found')
     if user.role not in PRIVILEGED and sale.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     return commerce_service.get_receipt(db, sale_id)
@@ -171,6 +181,12 @@ def sale_receipt(sale_id: int, user: User = Depends(get_current_user), db: Sessi
 def register_pos_sale(
     data: PosSaleCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
+    from app.models.branch import Branch
+    branch = db.get(Branch, data.branch_id)
+    if not branch:
+        raise HTTPException(404, "Branch not found")
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and branch.tenant_id != user.tenant_id:
+        raise HTTPException(403, "Branch does not belong to user tenant")
     sale = commerce_service.pos_sale(db, user.id, data)
     return commerce_service.sale_response(db, sale)
 
@@ -192,6 +208,12 @@ def list_reservations(
 def create_reservation(
     data: ReservationCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
+    from app.models.branch import Branch
+    branch = db.get(Branch, data.branch_id)
+    if not branch:
+        raise HTTPException(404, "Branch not found")
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and branch.tenant_id != user.tenant_id:
+        raise HTTPException(403, "Branch does not belong to user tenant")
     return commerce_service.create_reservation(db, user.id, data)
 
 
@@ -200,6 +222,8 @@ def get_reservation(
     reservation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     reservation = commerce_service.get_reservation(db, reservation_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and reservation.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Reservation not found')
     if user.role not in RESERVATION_STAFF and reservation.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     return reservation
@@ -213,6 +237,8 @@ def update_reservation(
     db: Session = Depends(get_db),
 ):
     reservation = commerce_service.get_reservation(db, reservation_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and reservation.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Reservation not found')
     if user.role not in RESERVATION_STAFF:
         if reservation.client_id != user.id:
             raise HTTPException(status_code=403, detail='Insufficient permissions')
@@ -226,6 +252,8 @@ def delete_reservation(
     reservation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     reservation = commerce_service.get_reservation(db, reservation_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and reservation.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Reservation not found')
     if user.role not in RESERVATION_STAFF and reservation.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     commerce_service.delete_reservation(db, reservation_id)
@@ -240,6 +268,8 @@ def cancel_reservation(
     Puede ser ejecutado por el propio cliente o por el personal de tienda.
     """
     reservation = commerce_service.get_reservation(db, reservation_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and reservation.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Reservation not found')
     if user.role not in RESERVATION_STAFF and reservation.client_id != user.id:
         raise HTTPException(status_code=403, detail='Insufficient permissions')
     return commerce_service.cancel_reservation(db, reservation_id)
@@ -255,6 +285,9 @@ def complete_reservation(
     Convierte una reserva en una venta formal de contado cuando el cliente se presenta a retirar la prenda.
     Descuenta definitivamente el stock físico y completa la reserva.
     """
+    reservation = commerce_service.get_reservation(db, reservation_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and reservation.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Reservation not found')
     sale = commerce_service.convert_reservation_to_sale(db, reservation_id, cashier_id=user.id)
     return commerce_service.sale_response(db, sale)
 
@@ -263,12 +296,16 @@ def complete_reservation(
 def update_sale_delivery_status(
     sale_id: int,
     data: DeliveryStatusUpdate,
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Actualiza el estado logístico de despacho de la venta (Pagado -> Por despachar -> Enviado -> Entregado).
     Permitido para personal de administración, encargado o cajero.
     """
+    sale = commerce_service.get_sale(db, sale_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and sale.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Sale not found')
     sale = commerce_service.update_delivery_status(db, sale_id, data.delivery_status, data.notes)
     return commerce_service.sale_response(db, sale)
 
@@ -283,5 +320,8 @@ def confirm_delivery_by_customer(
     """
     Permite al cliente final confirmar en su aplicación móvil o web la recepción conforme de la prenda entregada.
     """
+    sale = commerce_service.get_sale(db, sale_id)
+    if user.role != Role.SUPERADMIN and user.tenant_id is not None and sale.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail='Sale not found')
     sale = commerce_service.confirm_customer_delivery(db, sale_id, user.id, data.notes)
     return commerce_service.sale_response(db, sale)

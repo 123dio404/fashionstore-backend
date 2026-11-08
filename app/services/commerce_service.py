@@ -131,6 +131,9 @@ def add_to_cart(db: Session, user_id: int, data: CartItemRequest) -> CartRespons
     available = stock.physical_stock - stock.reserved_stock
     if available <= 0:
         raise HTTPException(409, "Stock not available")
+    user = db.get(User, user_id)
+    if user and user.tenant_id is not None and stock.variant.product.tenant_id != user.tenant_id:
+        raise HTTPException(403, "Product does not belong to user tenant")
     cart = get_or_create_cart(db, user_id)
     existing = next((i for i in cart.items if i.stock_id == data.stock_id), None)
     quantity = data.quantity + (existing.quantity if existing else 0)
@@ -179,6 +182,9 @@ def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
     branch = db.get(Branch, data.branch_id)
     if branch is None:
         raise HTTPException(404, "Branch not found")
+    user = db.get(User, user_id)
+    if user and user.tenant_id is not None and branch.tenant_id != user.tenant_id:
+        raise HTTPException(403, "Branch does not belong to user tenant")
     cart = db.scalar(
         select(Cart).where(Cart.user_id == user_id, Cart.status == "activo").with_for_update()
     ) or get_or_create_cart(db, user_id)
@@ -489,6 +495,9 @@ def create_reservation(db: Session, user_id: int, data: ReservationCreate) -> Re
     branch = db.get(Branch, data.branch_id)
     if branch is None:
         raise HTTPException(404, "Branch not found")
+    user = db.get(User, user_id)
+    if user and user.tenant_id is not None and branch.tenant_id != user.tenant_id:
+        raise HTTPException(403, "Branch does not belong to user tenant")
     entries = []
     requested: dict[int, int] = {}
     for inp in data.items:

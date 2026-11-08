@@ -13,6 +13,7 @@ class CollectionCreate(BaseModel):
 class CollectionResponse(CollectionCreate):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    tenant_id: int | None = None
     created_at: datetime
     product_ids: list[int] = []
 
@@ -39,4 +40,5 @@ class PromotionCreate(BaseModel):
 class PromotionResponse(PromotionCreate):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    tenant_id: int | None = None
     product_ids: list[int] = []
