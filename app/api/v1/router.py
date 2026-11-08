@@ -10,6 +10,7 @@ from app.api.v1 import (
     inventory,
     marketing,
     ml,
+    notifications,
     operations,
     products,
     reports,
@@ -36,6 +37,7 @@ api_router.include_router(inventory.router)
 api_router.include_router(finance.router)
 api_router.include_router(operations.router)
 api_router.include_router(commerce.router)
+api_router.include_router(notifications.router)
 api_router.include_router(customer_experience.router)
 api_router.include_router(marketing.router)
 api_router.include_router(reports.router)

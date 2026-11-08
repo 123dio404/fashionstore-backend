@@ -29,6 +29,7 @@ from app.models.customer_experience import (
     VirtualFittingSession,
 )
 from app.models.marketing import Collection, Promotion
+from app.models.notification import Notification
 from app.models.supplier import ProductSupplier, Supplier
 from app.models.exchange import GarmentExchange
 from app.models.tenant import Plan, Subscription, Tenant
@@ -57,6 +58,7 @@ __all__ = [
     "InventoryMovement",
     "MaintenanceTask",
     "MovementType",
+    "Notification",
     "Payment",
     "PaymentMethod",
     "PaymentStatus",
