@@ -319,18 +319,18 @@ def notify_tenant_status_change(
         link="/admin/tenants",
     )
 
-    # 2. Al Administrador de la tienda
-    is_suspended = new_status == "Suspendido"
+    # 2. Al Administrador de la tienda (Dueño de la Tienda)
+    is_suspended = new_status.lower() in ("suspendido", "inactivo")
     send_notification(
         db=db,
         tenant_id=tenant.id,
         target_role=Role.ADMINISTRADOR.value,
-        title=f"{'⚠️ Alerta: Empresa Suspendida' if is_suspended else '✅ Empresa Reactivada'}",
+        title="⚠️ Alerta: Tienda Suspendida por Falta de Pago" if is_suspended else "✅ Tienda Reactivada",
         message=(
-            f"Tu empresa '{tenant.name}' ha sido suspendida temporalmente por mora en la suscripción SaaS. "
-            f"Las ventas y reservas estarán bloqueadas hasta regularizar el pago en 'Planes y Suscripción'."
+            f"Tu empresa '{tenant.name}' ha sido suspendida temporalmente por mora o falta de pago en la suscripción SaaS. "
+            f"Las ventas y reservas quedan bloqueadas hasta regularizar el pago en 'Planes y Suscripción'."
             if is_suspended
-            else f"Tu empresa '{tenant.name}' se encuentra activa. Todas las operaciones de caja y catálogo están habilitadas."
+            else f"Tu empresa '{tenant.name}' se encuentra activa nuevamente. Todas las operaciones de caja y catálogo están habilitadas."
         ),
         notif_type="subscription_alert",
         link="/admin/subscription",
@@ -378,3 +378,4 @@ def notify_stock_critical(
         notif_type="system",
         link="/inventory",
     )
+
