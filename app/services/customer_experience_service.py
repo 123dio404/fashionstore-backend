@@ -216,17 +216,17 @@ def generate_recommendations(db: Session, user_id: int, limit: int = 10) -> Reco
             .group_by(Product.category_id)
         )
     }
-    products = list(
-        db.scalars(
-            select(Product)
-            .options(
-                selectinload(Product.variants).selectinload(ProductVariant.stocks),
-                selectinload(Product.variants).selectinload(ProductVariant.color),
-            )
-            .where(Product.is_active.is_(True))
-            .order_by(Product.id)
-        ).all()
+    prod_stmt = (
+        select(Product)
+        .options(
+            selectinload(Product.variants).selectinload(ProductVariant.stocks),
+            selectinload(Product.variants).selectinload(ProductVariant.color),
+        )
+        .where(Product.is_active.is_(True))
     )
+    if user and getattr(user, "tenant_id", None) is not None:
+        prod_stmt = prod_stmt.where(Product.tenant_id == user.tenant_id)
+    products = list(db.scalars(prod_stmt.order_by(Product.id)).all())
     # (producto, puntaje, motivo, tipo de recomendación, stock disponible)
     scored: list[tuple[Product, Decimal, str, str, int]] = []
     candidates_for_ai = []
@@ -482,7 +482,10 @@ def send_chat_message(db: Session, conversation: ChatConversation, content: str,
     db.add(ChatMessage(conversation_id=conversation.id, role="user", content=content, context=context))
     provider = get_ai_provider()
     if provider.__class__.__name__ != "DisabledAIProvider":
-        answer = provider.generate_text(render_prompt(content, chat_context))
+        try:
+            answer = provider.generate_text(render_prompt(content, chat_context))
+        except Exception:
+            answer = deterministic_reply(content, chat_context)
     else:
         answer = deterministic_reply(content, chat_context)
     assistant_message = ChatMessage(

@@ -129,36 +129,46 @@ class DemandForecastingModel:
         base_price: float,
         days: int = 7
     ) -> list[dict[str, Any]]:
-        """Genera proyección de demanda día por día para los próximos N días."""
+        """Genera proyección de demanda día por día para los próximos N días (vectorizado en 1 llamada batch)."""
         if self.model is None:
             self.train()
 
-        forecasts = []
         start_date = datetime.now()
+        rows = []
+        meta = []
+        day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
         for i in range(1, days + 1):
             target_date = start_date + timedelta(days=i)
             day_of_week = target_date.weekday()
             is_weekend = 1 if day_of_week in [4, 5, 6] else 0
             month = target_date.month
+            rows.append({
+                "branch_id": branch_id,
+                "category_id": category_id,
+                "day_of_week": day_of_week,
+                "month": month,
+                "is_weekend": is_weekend,
+                "promotion": 0,
+                "precio": base_price,
+            })
+            meta.append((target_date.strftime("%Y-%m-%d"), day_names[day_of_week], bool(is_weekend)))
 
-            pred_units = self.predict_single(
-                branch_id=branch_id,
-                category_id=category_id,
-                day_of_week=day_of_week,
-                month=month,
-                is_weekend=is_weekend,
-                precio=base_price,
-                promotion=0
-            )
+        if not rows:
+            return []
 
-            # Stock de seguridad recomendado: Demanda estimada * factor de variabilidad (1.25)
+        features_df = pd.DataFrame(rows)
+        preds = self.model.predict(features_df)
+
+        forecasts = []
+        for idx, raw_pred in enumerate(preds):
+            pred_units = max(0.0, float(round(float(raw_pred), 1)))
             safety_stock = int(np.ceil(pred_units * 1.25))
-
+            fecha_str, dia_str, es_finde = meta[idx]
             forecasts.append({
-                "fecha": target_date.strftime("%Y-%m-%d"),
-                "dia_semana": ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][day_of_week],
-                "es_fin_de_semana": bool(is_weekend),
+                "fecha": fecha_str,
+                "dia_semana": dia_str,
+                "es_fin_de_semana": es_finde,
                 "demanda_estimada_unidades": pred_units,
                 "ingresos_proyectados_bs": round(pred_units * base_price, 2),
                 "stock_seguridad_recomendado": safety_stock,

@@ -348,14 +348,66 @@ def process_generative_query(db: Session, tenant_id: int, prompt: str) -> dict[s
             resumen_narrativo = ""
 
     if not resumen_narrativo:
+        filas = report_data.get("filas", [])
         if intent == "top_productos":
-            resumen_narrativo = f"El análisis de productos más vendidos para {tenant_name} evidencia una sólida rotación en las líneas principales de indumentaria. Se recomienda mantener stock de seguridad en las tallas centrales."
+            if filas:
+                top1 = filas[0]
+                total_u = sum(int(r.get("Unidades Vendidas", 0)) for r in filas)
+                total_bs = sum(float(r.get("Ingresos Generados (Bs.)", 0)) for r in filas)
+                resumen_narrativo = (
+                    f"El análisis de rotación comercial para {tenant_name} muestra un total de {total_u} unidades comercializadas "
+                    f"entre los productos líderes, generando Bs. {total_bs:,.2f}. La prenda estrella es '{top1.get('Prenda / Producto')}' "
+                    f"({top1.get('Categoría')}) con {top1.get('Unidades Vendidas')} unidades vendidas y Bs. {float(top1.get('Ingresos Generados (Bs.)', 0)):,.2f} en facturación.\n\n"
+                    f"Recomendación estratégica: Priorizar la reposición de tallas centrales (S, M, L) en la línea de {top1.get('Categoría')} "
+                    f"y destacar '{top1.get('Prenda / Producto')}' en campañas promocionales de temporada."
+                )
+            else:
+                resumen_narrativo = f"No se registran ventas suficientes en el período consultado para {tenant_name}."
         elif intent == "riesgo_stock":
-            resumen_narrativo = f"Se han detectado {len(report_data['filas'])} variantes de prendas en nivel crítico o por debajo del stock mínimo. Se aconseja emitir órdenes de compra inmediatas para evitar pérdida de ventas."
+            if filas:
+                agotados = sum(1 for r in filas if r.get("Estado") == "AGOTADO")
+                criticos = sum(1 for r in filas if r.get("Estado") == "CRÍTICO")
+                primera = filas[0]
+                resumen_narrativo = (
+                    f"Auditoría de inventario en tiempo real para {tenant_name}: se detectaron {len(filas)} variantes con nivel de alerta "
+                    f"({agotados} agotadas y {criticos} en estado crítico por debajo del stock mínimo). El caso más urgente corresponde a "
+                    f"'{primera.get('Producto')}' (SKU {primera.get('Código / SKU')}) en {primera.get('Sucursal')} con {primera.get('Stock Disponible')} unidades disponibles "
+                    f"frente a un mínimo requerido de {primera.get('Stock Mínimo')}.\n\n"
+                    f"Recomendación estratégica: Emitir orden de reabastecimiento inmediata a proveedores o ejecutar traspaso inter-sucursal "
+                    f"para evitar quiebres de stock en reservas O2O y punto de venta (POS)."
+                )
+            else:
+                resumen_narrativo = f"Excelente salud de inventario en {tenant_name}: todas las variantes se encuentran por encima del umbral de stock crítico."
         elif intent == "comparativa_trimestral":
-            resumen_narrativo = f"La comparativa trimestral refleja un comportamiento positivo entre sucursales, con un crecimiento constante en los puntos de venta principales."
+            if filas:
+                ordenada = sorted(filas, key=lambda r: float(r.get("Total Trimestre (Bs.)", 0)), reverse=True)
+                lider = ordenada[0]
+                total_trim_empresa = sum(float(r.get("Total Trimestre (Bs.)", 0)) for r in filas)
+                resumen_narrativo = (
+                    f"La evolución trimestral consolidada de {tenant_name} alcanza Bs. {total_trim_empresa:,.2f} entre sus {len(filas)} sucursales activas. "
+                    f"La sucursal con mejor desempeño acumulado es {lider.get('Sucursal')}, aportando Bs. {float(lider.get('Total Trimestre (Bs.)', 0)):,.2f} "
+                    f"al cierre del trimestre.\n\n"
+                    f"Recomendación estratégica: Replicar el mix de catálogo y promociones de {lider.get('Sucursal')} en las demás sucursales "
+                    f"para equilibrar la facturación mensual."
+                )
+            else:
+                resumen_narrativo = f"La comparativa trimestral de {tenant_name} no registra movimientos en los últimos 3 meses."
         else:
-            resumen_narrativo = f"El desempeño consolidado de ventas por sucursal para {tenant_name} muestra un flujo saludable de transacciones comerciales durante el período analizado."
+            if filas:
+                lider = filas[0]
+                total_ing = sum(float(r.get("Ingresos Totales (Bs.)", 0)) for r in filas)
+                total_tx = sum(int(r.get("Transacciones", 0)) for r in filas)
+                total_uni = sum(int(r.get("Unidades Vendidas", 0)) for r in filas)
+                resumen_narrativo = (
+                    f"Durante los últimos 30 días, {tenant_name} registró una facturación consolidada de Bs. {total_ing:,.2f} "
+                    f"a través de {total_tx} transacciones comerciales ({total_uni} prendas vendidas). "
+                    f"La tienda líder es {lider.get('Sucursal')} con Bs. {float(lider.get('Ingresos Totales (Bs.)', 0)):,.2f} "
+                    f"y un ticket promedio de Bs. {float(lider.get('Ticket Promedio (Bs.)', 0)):,.2f}.\n\n"
+                    f"Recomendación estratégica: Fortalecer el cross-selling en caja (POS) en las sucursales de menor ticket promedio "
+                    f"y asegurar disponibilidad de inventario en {lider.get('Sucursal')}."
+                )
+            else:
+                resumen_narrativo = f"El desempeño consolidado de ventas por sucursal para {tenant_name} aún no registra transacciones en los últimos 30 días."
 
     report_data["prompt_original"] = prompt
     report_data["empresa"] = tenant_name

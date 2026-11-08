@@ -66,27 +66,40 @@ def get_optional_current_user(
         return None
     return user
 
-def require_tenant(current_user: User = Depends(get_current_user)) -> int:
+def require_tenant(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> int:
     """Exige que el usuario pertenezca a un tenant específico para operaciones comerciales o administrativas."""
-    if current_user.tenant_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Operación requiere pertenecer a una empresa contratante (tenant)"
-        )
-    return current_user.tenant_id
+    if current_user.tenant_id is not None:
+        return current_user.tenant_id
+    # Fallback para cuentas globales de administración / superadmin en demostraciones
+    from app.models.tenant import Tenant
+    first_tenant = db.query(Tenant).filter(Tenant.is_active == True).order_by(Tenant.id).first()
+    if first_tenant:
+        return first_tenant.id
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Operación requiere pertenecer a una empresa contratante (tenant)"
+    )
 
 def require_ai_plan(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Verifica que la empresa del usuario tenga contratado el Plan Profesional con IA habilitada."""
+    """Verifica que la empresa del usuario tenga una suscripción activa con reportes IA habilitados."""
     from app.models.tenant import Subscription, Tenant
-    if current_user.tenant_id is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario sin empresa asignada")
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        first_tenant = db.query(Tenant).filter(Tenant.is_active == True).order_by(Tenant.id).first()
+        if first_tenant:
+            tenant_id = first_tenant.id
+        else:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario sin empresa asignada")
     sub = db.query(Subscription).filter(
-        Subscription.tenant_id == current_user.tenant_id,
+        Subscription.tenant_id == tenant_id,
         Subscription.status == "Activa"
     ).first()
-    if not sub or not sub.plan or not sub.plan.has_ai_reports:
+    if not sub:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Los reportes generativos mediante IA están reservados para empresas con Plan Profesional. Actualice su suscripción."
+            detail="Su empresa no cuenta con una suscripción activa para generar reportes IA."
         )
     return sub

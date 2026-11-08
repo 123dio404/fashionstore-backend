@@ -25,7 +25,7 @@ def get_ml_status() -> dict[str, Any]:
 @router.post(
     "/train",
     summary="Generar datos sintéticos y reentrenar modelos (RF19, RF20, RF21)",
-    dependencies=[Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO))],
+    dependencies=[Depends(require_role(Role.SUPERADMIN, Role.ADMINISTRADOR, Role.ENCARGADO))],
 )
 def train_ml_models() -> dict[str, Any]:
     """Genera nuevo dataset sintético y reentrena Random Forest y K-Means."""

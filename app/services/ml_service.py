@@ -74,42 +74,64 @@ def predict_demand(
     if not branches:
         return {"error": "No se encontraron sucursales activas para este tenant", "proyecciones": []}
 
-    categories = db.scalars(select(Category)).all()
+    # Obtener únicamente categorías que tienen productos activos en este tenant (aislamiento multitenant)
+    cat_price_rows = db.execute(
+        select(
+            Category.id,
+            Category.name,
+            func.avg(Product.price).label("avg_price"),
+        )
+        .join(Product, Product.category_id == Category.id)
+        .where(
+            Product.tenant_id == tenant_id,
+            Product.is_active == True,
+        )
+        .group_by(Category.id, Category.name)
+        .order_by(Category.id)
+    ).all()
+
     if category_id is not None:
-        categories = [c for c in categories if c.id == category_id]
+        cat_price_rows = [r for r in cat_price_rows if r.id == category_id]
+
+    # Si no hubiera categorías con productos para el filtro dado, usar las del catálogo general filtradas
+    if not cat_price_rows and category_id is not None:
+        cat_obj = db.get(Category, category_id)
+        if cat_obj:
+            cat_price_rows = [(cat_obj.id, cat_obj.name, 99.99)]
+
+    # Consultar stock disponible agrupado por (branch_id, category_id) en 1 sola consulta SQL
+    branch_ids = [b.id for b in branches]
+    stock_rows = db.execute(
+        select(
+            Stock.branch_id,
+            Product.category_id,
+            func.coalesce(func.sum(Stock.physical_stock - Stock.reserved_stock), 0).label("avail"),
+        )
+        .join(ProductVariant, ProductVariant.id == Stock.variant_id)
+        .join(Product, Product.id == ProductVariant.product_id)
+        .where(
+            Stock.branch_id.in_(branch_ids),
+            Product.tenant_id == tenant_id,
+        )
+        .group_by(Stock.branch_id, Product.category_id)
+    ).all()
+    stock_map: dict[tuple[int, int], int] = {
+        (int(r.branch_id), int(r.category_id)): int(r.avail or 0)
+        for r in stock_rows
+    }
 
     projections = []
     stock_risk_alerts = []
 
     for branch in branches:
-        for cat in categories:
-            # Obtener precio promedio de productos de esta categoría en la empresa
-            avg_price_res = db.execute(
-                select(func.avg(Product.price))
-                .where(
-                    Product.tenant_id == tenant_id,
-                    Product.category_id == cat.id,
-                    Product.is_active == True,
-                )
-            ).scalar()
+        for cat_id, cat_name, avg_price_res in cat_price_rows:
             base_price = float(avg_price_res or 99.99)
+            available_stock = stock_map.get((branch.id, cat_id), 0)
 
-            # Obtener stock físico disponible actual en esta sucursal y categoría
-            available_stock = db.execute(
-                select(func.coalesce(func.sum(Stock.physical_stock - Stock.reserved_stock), 0))
-                .join(ProductVariant, ProductVariant.id == Stock.variant_id)
-                .join(Product, Product.id == ProductVariant.product_id)
-                .where(
-                    Stock.branch_id == branch.id,
-                    Product.category_id == cat.id,
-                    Product.tenant_id == tenant_id,
-                )
-            ).scalar() or 0
-
-            # Proyección para los próximos N días
+            # Proyección para los próximos N días (vectorizada)
             daily_forecast = demand_model.forecast_days(
                 branch_id=branch.id,
-                category_id=cat.id,
+                category_id=cat_id,
                 base_price=base_price,
                 days=days,
             )
@@ -124,8 +146,8 @@ def predict_demand(
             item = {
                 "sucursal_id": branch.id,
                 "sucursal_nombre": branch.name,
-                "categoria_id": cat.id,
-                "categoria_nombre": cat.name,
+                "categoria_id": cat_id,
+                "categoria_nombre": cat_name,
                 "precio_promedio_bs": round(base_price, 2),
                 "stock_disponible_actual": int(available_stock),
                 "demanda_total_proyectada": round(total_projected_units, 1),
@@ -139,7 +161,7 @@ def predict_demand(
             if is_risk:
                 stock_risk_alerts.append({
                     "sucursal": branch.name,
-                    "categoria": cat.name,
+                    "categoria": cat_name,
                     "stock_actual": int(available_stock),
                     "demanda_esperada": round(total_projected_units, 1),
                     "unidades_sugeridas_reorden": int(stock_deficit + 10),
@@ -149,7 +171,7 @@ def predict_demand(
         "tenant_id": tenant_id,
         "dias_pronostico": days,
         "total_sucursales_evaluadas": len(branches),
-        "total_categorias_evaluadas": len(categories),
+        "total_categorias_evaluadas": len(cat_price_rows),
         "alertas_riesgo_stock": stock_risk_alerts,
         "proyecciones": projections,
     }

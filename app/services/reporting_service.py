@@ -170,15 +170,19 @@ def analytical_query(db: Session, query: str, client_id=None, start_date=None, e
         parameters["audio"] = audio
     provider = get_ai_provider()
     if provider.__class__.__name__ != "DisabledAIProvider":
-        interpretation = provider.generate_json(
-            "Classify this FashionStore analytical query. Return JSON with intent equal to "
-            "one of inventory, purchase_history, dashboard, sales, and optional client_id. "
-            f"Query: {query}"
-        )
-        intent_hint = interpretation.get("intent", "sales")
-        if intent_hint == "purchase_history" and client_id is None:
-            client_id = interpretation.get("client_id")
-        normalized = intent_hint
+        try:
+            interpretation = provider.generate_json(
+                "Classify this FashionStore analytical query. Return JSON with intent equal to "
+                "one of inventory, purchase_history, dashboard, sales, and optional client_id. "
+                f"Query: {query}"
+            )
+            intent_hint = interpretation.get("intent", "sales")
+            if intent_hint == "purchase_history" and client_id is None:
+                client_id = interpretation.get("client_id")
+            if intent_hint in {"inventory", "purchase_history", "dashboard", "sales"}:
+                normalized = intent_hint
+        except Exception:
+            pass
     if normalized in {"inventory", "purchase_history", "dashboard", "sales"}:
         intent = normalized
         if intent == "inventory":
