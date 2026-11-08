@@ -29,7 +29,7 @@ import uuid
 from sqlalchemy import func, select, text
 
 from app.core.database import SessionLocal
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, verify_password
 from app.models.tenant import Tenant, Plan, Subscription
 from app.models.user import User, Rol, Role
 from app.models.branch import Branch, City
@@ -67,7 +67,9 @@ def ensure_user(db, email: str, full_name: str, role_name: str, tenant_id: int |
         db.add(user)
     else:
         user.full_name = full_name
-        user.password_hash = get_password_hash(DEMO_PASSWORD)
+        # bcrypt es costoso: solo re-hashea si la contraseña demo cambió.
+        if not verify_password(DEMO_PASSWORD, user.password_hash):
+            user.password_hash = get_password_hash(DEMO_PASSWORD)
         user.tenant_id = tenant_id
         user.is_active = True
         if rol not in user.roles:
