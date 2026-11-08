@@ -16,6 +16,12 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 @router.post('/login', response_model=LoginResponse)
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(db, form.username, form.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Credenciales incorrectas o usuario inactivo',
+            headers={'WWW-Authenticate': 'Bearer'},
+        )
     role_val = user.role.value if user.role else 'Cliente'
     claims = {
         'role': role_val,
