@@ -46,3 +46,4 @@ class BroadcastResultResponse(BaseModel):
     detail: str
     count: int
     type: str
+

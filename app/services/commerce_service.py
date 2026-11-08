@@ -50,6 +50,29 @@ class MockPaymentProvider:
 PAYMENT_PROVIDERS = {"mock": MockPaymentProvider()}
 
 
+def _notify_critical_stock(db: Session, branch: Branch, stock: Stock) -> None:
+    """Dispara automáticamente una notificación de stock crítico al Administrador de la tienda (Punto 3)."""
+    try:
+        from app.models.notification import Notification
+        from app.models.product import ProductVariant
+        variant = db.get(ProductVariant, stock.variant_id)
+        prod_name = variant.product.name if variant and variant.product else f"Prenda #{stock.variant_id}"
+        size_name = variant.size.name if variant and variant.size else ""
+        color_name = variant.color.name if variant and variant.color else ""
+        notif = Notification(
+            tenant_id=branch.tenant_id,
+            target_role="Administrador",
+            title="⚠️ Alerta de Stock Crítico",
+            message=f"La prenda '{prod_name}' (Talla {size_name}, Color {color_name}) en la sucursal '{branch.name}' tiene solo {stock.physical_stock} unidades disponibles. Se sugiere reposición urgente.",
+            type="system",
+            link="/admin/inventory",
+            is_read=False,
+        )
+        db.add(notif)
+    except Exception:
+        pass
+
+
 def _stock(db: Session, stock_id: int) -> Stock:
     stock = db.get(Stock, stock_id)
     if stock is None:
@@ -182,6 +205,11 @@ def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
     branch = db.get(Branch, data.branch_id)
     if branch is None:
         raise HTTPException(404, "Branch not found")
+    if branch.tenant and branch.tenant.status == "Suspendido":
+        raise HTTPException(
+            status_code=403,
+            detail="Operación bloqueada: La empresa se encuentra suspendida por falta de pago de suscripción SaaS.",
+        )
     user = db.get(User, user_id)
     if user and user.tenant_id is not None and branch.tenant_id != user.tenant_id:
         raise HTTPException(403, "Branch does not belong to user tenant")
@@ -198,7 +226,16 @@ def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
             raise HTTPException(409, f"Insufficient stock for {ci.stock_id}")
         locked_items.append((ci, stock))
         total += ci.price * ci.quantity
-    sale = Sale(tenant_id=branch.tenant_id, client_id=user_id, user_id=user_id, branch_id=data.branch_id, total=total, sale_type="digital")
+    sale = Sale(
+        tenant_id=branch.tenant_id,
+        client_id=user_id,
+        user_id=user_id,
+        branch_id=data.branch_id,
+        total=total,
+        sale_type="digital",
+        tax_id=data.tax_id or "0",
+        business_name=data.business_name or "Consumidor Final",
+    )
     db.add(sale)
     db.flush()
     provider = get_payment_provider(data.payment_provider)
@@ -235,6 +272,8 @@ def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
             stock.physical_stock -= ci.quantity
             sale.items.append(SaleItem(stock_id=ci.stock_id, quantity=ci.quantity, unit_price=ci.price))
             db.add(InventoryMovement(movement_type=MovementType.VENTA, inventory_id=stock.id, quantity=-ci.quantity, reason="Venta digital"))
+            if stock.physical_stock <= 2:
+                _notify_critical_stock(db, branch, stock)
         cart.status = "completado"
         db.commit()
         db.refresh(sale)
@@ -411,6 +450,8 @@ def sale_response(db: Session, sale: Sale) -> SaleResponse:
         sale_type=st,
         delivery_status=getattr(sale, "delivery_status", "PAGADO") or "PAGADO",
         customer_notes=getattr(sale, "customer_notes", None),
+        tax_id=getattr(sale, "tax_id", None) or "0",
+        business_name=getattr(sale, "business_name", None) or "Consumidor Final",
         delivered_at=getattr(sale, "delivered_at", None),
         items=sale_items(db, sale),
         payments=[SalePaymentResponse.model_validate(p) for p in sale.payments],
@@ -421,6 +462,11 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
     branch = db.get(Branch, data.branch_id)
     if branch is None:
         raise HTTPException(404, "Branch not found")
+    if branch.tenant and branch.tenant.status == "Suspendido":
+        raise HTTPException(
+            status_code=403,
+            detail="Operación bloqueada: La empresa se encuentra suspendida por falta de pago de suscripción SaaS.",
+        )
     client = db.get(User, data.client_id)
     if client is None:
         raise HTTPException(404, "Client not found")
@@ -441,7 +487,16 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
     requested_status = data.payment_status or (
         PaymentStatus.COMPLETADO if data.paid else PaymentStatus.PENDIENTE
     )
-    sale = Sale(tenant_id=branch.tenant_id, client_id=data.client_id, user_id=user_id, branch_id=data.branch_id, total=total, sale_type="pos")
+    sale = Sale(
+        tenant_id=branch.tenant_id,
+        client_id=data.client_id,
+        user_id=user_id,
+        branch_id=data.branch_id,
+        total=total,
+        sale_type="pos",
+        tax_id=data.tax_id or "0",
+        business_name=data.business_name or "Consumidor Final",
+    )
     db.add(sale)
     db.flush()
     provider_name = (data.payment_provider or settings.payment_provider).casefold()
@@ -482,6 +537,8 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
                 reason="Venta POS",
             )
         )
+        if stock.physical_stock <= 2:
+            _notify_critical_stock(db, branch, stock)
     db.add(sale)
     db.flush()
     if sale.payments[0].reference is None:
@@ -677,11 +734,19 @@ def get_receipt(db: Session, sale_id: int) -> ReceiptResponse:
     sale = get_sale(db, sale_id)
     status = sale.payments[-1].status if sale.payments else PaymentStatus.PENDIENTE.value
     return ReceiptResponse(
-        sale_id=sale.id, receipt_number=f"REC-{sale.id:012d}",
-        invoice_number=f"FAC-{sale.id:012d}", sale_date=sale.sale_date,
-        sale_type=sale.sale_type, branch_id=sale.branch_id, client_id=sale.client_id,
-        subtotal=sale.total, total=sale.total, payment_status=status,
-        items=[{"id": i.id, "stock_id": i.stock_id, "quantity": i.quantity, "unit_price": i.unit_price} for i in sale.items],
+        sale_id=sale.id,
+        receipt_number=f"REC-{sale.id:012d}",
+        invoice_number=f"FAC-{sale.id:012d}",
+        sale_date=sale.sale_date,
+        sale_type=sale.sale_type,
+        branch_id=sale.branch_id,
+        client_id=sale.client_id,
+        tax_id=getattr(sale, "tax_id", None) or "0",
+        business_name=getattr(sale, "business_name", None) or "Consumidor Final",
+        subtotal=sale.total,
+        total=sale.total,
+        payment_status=status,
+        items=sale_items(db, sale),
     )
 
 
@@ -708,6 +773,12 @@ def convert_reservation_to_sale(
     if reservation.status in ("cancelada", "completada"):
         raise HTTPException(status_code=400, detail=f"Reserva en estado '{reservation.status}' no puede convertirse a venta")
 
+    if reservation.branch and reservation.branch.tenant and reservation.branch.tenant.status == "Suspendido":
+        raise HTTPException(
+            status_code=403,
+            detail="Operación bloqueada: La empresa se encuentra suspendida por falta de pago de suscripción SaaS.",
+        )
+
     now = datetime.now(timezone.utc)
     # Consumir el stock reservado
     _consume_reserved(db, reservation)
@@ -717,15 +788,20 @@ def convert_reservation_to_sale(
 
     # Calcular total y crear items de venta
     total = Decimal("0.00")
-    sale_items: list[SaleItem] = []
+    sale_items_list: list[SaleItem] = []
     for item in reservation.items:
         stock = db.get(Stock, item.stock_id)
         unit_price = stock.variant.price if stock and stock.variant else Decimal("0.00")
         line_total = unit_price * item.quantity
         total += line_total
-        sale_items.append(
+        sale_items_list.append(
             SaleItem(stock_id=item.stock_id, quantity=item.quantity, unit_price=unit_price)
         )
+        if stock and stock.physical_stock <= 2:
+            _notify_critical_stock(db, reservation.branch, stock)
+
+    client_user = db.get(User, reservation.client_id)
+    business_name = client_user.full_name if client_user else "Consumidor Final"
 
     sale = Sale(
         client_id=reservation.client_id,
@@ -735,7 +811,9 @@ def convert_reservation_to_sale(
         sale_date=now,
         total=total,
         sale_type="Reserva Entregada (Contado)",
-        items=sale_items,
+        tax_id="0",
+        business_name=business_name,
+        items=sale_items_list,
         payments=[
             SalePayment(
                 amount=total,

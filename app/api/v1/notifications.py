@@ -163,3 +163,4 @@ def broadcast_to_customers(
         count=1,
         type=data.type,
     )
+

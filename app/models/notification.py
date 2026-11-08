@@ -39,3 +39,4 @@ class Notification(Base):
 
     tenant: Mapped["Tenant | None"] = relationship()
     user: Mapped["User | None"] = relationship()
+

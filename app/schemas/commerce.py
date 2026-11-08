@@ -77,6 +77,8 @@ class CheckoutRequest(BaseModel):
     idempotency_key: str | None = None
     card_token: str | None = None
     simulate_rejection: bool = False
+    tax_id: str | None = None
+    business_name: str | None = None
 
 
 class QrPaymentRequest(BaseModel):
@@ -106,6 +108,8 @@ class PosSaleCreate(BaseModel):
     payment_provider: str = "stripe"
     payment_status: PaymentStatus | None = None
     payment_reference: str | None = None
+    tax_id: str | None = None
+    business_name: str | None = None
 
 
 class SaleItemResponse(ORMModel):
@@ -140,6 +144,8 @@ class SaleResponse(ORMModel):
     sale_type: str = "pos"
     delivery_status: str = "PAGADO"
     customer_notes: str | None = None
+    tax_id: str | None = None
+    business_name: str | None = None
     delivered_at: datetime | None = None
     items: list[SaleItemResponse] = []
     payments: list[SalePaymentResponse] = []
@@ -162,6 +168,8 @@ class ReceiptResponse(BaseModel):
     sale_type: str = "pos"
     branch_id: int
     client_id: int
+    tax_id: str | None = None
+    business_name: str | None = None
     subtotal: Decimal
     total: Decimal
     payment_status: PaymentStatus
@@ -177,6 +185,8 @@ class InvoiceResponse(BaseModel):
     issuer_name: str
     issuer_tax_id: str | None
     customer_id: int
+    customer_tax_id: str | None = None
+    customer_business_name: str | None = None
     tax_rate: Decimal
     subtotal: Decimal
     tax: Decimal

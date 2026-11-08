@@ -17,6 +17,7 @@ from app.schemas.saas import (
     TenantSummaryResponse,
     ChangePlanRequest,
     TenantCreateRequest,
+    TenantStatusUpdate,
 )
 from app.services.auth_service import normalize_email
 
@@ -247,6 +248,46 @@ def list_tenants(
             )
         )
     return results
+
+
+@router.patch("/tenants/{tenant_id}/status", response_model=TenantSummaryResponse)
+def update_tenant_status(
+    tenant_id: int,
+    data: TenantStatusUpdate,
+    user: User = Depends(require_role(Role.SUPERADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Superadministrador: Suspender o reactivar una empresa por falta de pago o política SaaS (Punto 5)."""
+    tenant = db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+
+    clean_status = data.status.capitalize()
+    if clean_status not in ("Activo", "Suspendido"):
+        raise HTTPException(status_code=400, detail="El estado debe ser 'Activo' o 'Suspendido'")
+
+    tenant.status = clean_status
+    if tenant.subscription:
+        tenant.subscription.status = "Activa" if clean_status == "Activo" else "Suspendida"
+
+    db.commit()
+    db.refresh(tenant)
+
+    active_b = db.scalar(
+        select(func.count(Branch.id)).where(Branch.tenant_id == tenant.id, Branch.is_active == True)
+    ) or 0
+
+    return TenantSummaryResponse(
+        id=tenant.id,
+        name=tenant.name,
+        slug=tenant.slug,
+        tax_id=tenant.tax_id,
+        status=tenant.status,
+        created_at=tenant.created_at,
+        active_branches_count=active_b,
+        subscription=tenant.subscription,
+    )
+
 
 
 def _resolve_plan(db: Session, plan_name: str, active_only: bool = False) -> Plan:

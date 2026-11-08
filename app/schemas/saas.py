@@ -50,6 +50,10 @@ class TenantSummaryResponse(ORMModel):
     subscription: SubscriptionResponse | None = None
 
 
+class TenantStatusUpdate(BaseModel):
+    status: str = Field(description="Estado de la empresa: 'Activo' o 'Suspendido'")
+
+
 class ChangePlanRequest(BaseModel):
     plan_name: str = Field(description="Nombre del plan: 'Básico', 'Profesional' o 'Empresarial'")
     months: int = Field(default=12, ge=1, le=36, description="Meses de vigencia para la suscripción simulada")

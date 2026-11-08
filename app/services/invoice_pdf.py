@@ -79,6 +79,8 @@ def build_invoice_pdf(invoice: dict, lines: list[dict] | None = None) -> bytes:
         ("Fecha", issued.strftime("%d/%m/%Y %H:%M UTC")),
         ("Cliente", f"#{invoice.get('customer_id')}"),
         ("Pago", f"{invoice.get('payment_status')} · {reference}"),
+        ("NIT / CI", invoice.get("customer_tax_id") or "0"),
+        ("Razón Social", invoice.get("customer_business_name") or "Consumidor Final"),
     ]
     half = (width - 2 * MARGIN) / 2
     pdf.setFont("Helvetica-Bold", 9)

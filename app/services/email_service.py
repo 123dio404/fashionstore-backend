@@ -120,3 +120,4 @@ def send_password_reset_email(to_email: str, full_name: str, token: str) -> dict
         "reset_url": reset_url,
         "token": token,
     }
+

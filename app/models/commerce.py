@@ -55,6 +55,8 @@ class Sale(Base):
     sale_type: Mapped[str] = mapped_column("tipo_venta", String(30), nullable=False)
     delivery_status: Mapped[str] = mapped_column("estado_entrega", String(30), default="PAGADO", nullable=False)
     customer_notes: Mapped[str | None] = mapped_column("notas_cliente", String(255), nullable=True)
+    tax_id: Mapped[str | None] = mapped_column("nit_cliente", String(50), nullable=True)
+    business_name: Mapped[str | None] = mapped_column("razon_social_cliente", String(150), nullable=True)
     delivered_at: Mapped[datetime | None] = mapped_column("fecha_entrega", DateTime(timezone=True), nullable=True)
 
     branch: Mapped["Branch"] = relationship()
