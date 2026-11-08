@@ -30,7 +30,7 @@ from app.providers import get_payment_provider, get_fiscal_provider, get_notific
 router = APIRouter(prefix='/commerce', tags=['commerce'])
 staff = Depends(require_role(Role.ADMINISTRADOR, Role.ENCARGADO, Role.CAJERO))
 PRIVILEGED = (Role.ADMINISTRADOR, Role.ENCARGADO, Role.CAJERO)
-RESERVATION_STAFF = (Role.ENCARGADO, Role.CAJERO)
+RESERVATION_STAFF = (Role.ADMINISTRADOR, Role.ENCARGADO, Role.CAJERO)
 
 
 @router.post('/payments/stripe/webhook', include_in_schema=False)

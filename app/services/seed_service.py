@@ -22,6 +22,7 @@ from app.models.branch import Branch, City
 from app.models.commerce import Sale, SaleItem, SalePayment
 from app.models.inventory import InventoryMovement, MovementType, Stock
 from app.models.product import Category, Color, Product, ProductVariant, Season, Size
+from app.models.tenant import Tenant
 from app.models.user import Role, User
 from app.services.auth_service import get_role, normalize_email
 
@@ -29,6 +30,7 @@ DEMO_PASSWORD = "Admin123"
 
 # (rol, email genérico, nombre completo)
 DEMO_ACTORS: list[tuple[Role, str, str]] = [
+    (Role.SUPERADMIN, "superadmin@fashionstore.com", "Superadministrador SaaS"),
     (Role.ADMINISTRADOR, "admin@fashionstore.com", "Administrador"),
     (Role.ENCARGADO, "encargado@fashionstore.com", "Encargado de tienda"),
     (Role.CAJERO, "cajero@fashionstore.com", "Cajero"),
@@ -174,12 +176,32 @@ def get_or_create(db, model, **kwargs):
 
 def ensure_demo_catalog() -> list[str]:
     """Siembra la red de sucursales, los parámetros y los 8 productos demo con sus
-    variantes (talla × color) y stock por sucursal. Idempotente."""
+    variantes (talla × color) y stock por sucursal. Idempotente.
+    Si ya existen empresas (tenants) multi-tenant en la base de datos, solo garantiza
+    las temporadas y tallas globales sin contaminar los catálogos exclusivos de cada tenant.
+    """
     db = SessionLocal()
     summary: list[str] = []
     try:
-        # 1. Ciudades y sucursales (se reutiliza la sucursal si ya existe por nombre,
-        #    para no duplicar "Sucursal Centro" cuando la base ya tiene datos).
+        # 1. Parámetros globales (temporadas, tallas)
+        for season_name, start, end in DEMO_SEASONS:
+            get_or_create(
+                db,
+                Season,
+                name=season_name,
+                start_date=date.fromisoformat(start),
+                end_date=date.fromisoformat(end),
+            )
+        for size_name in DEMO_CLOTHING_SIZES + DEMO_SHOE_SIZES:
+            get_or_create(db, Size, name=size_name)
+        summary.append(f"tallas: {len(DEMO_CLOTHING_SIZES + DEMO_SHOE_SIZES)}")
+
+        if db.scalar(select(Tenant.id).limit(1)) is not None:
+            db.commit()
+            summary.append("catálogos multi-tenant activos (se omite catálogo legacy global)")
+            return summary
+
+        # 2. Ciudades y sucursales legacy (solo si la base no tiene tenants)
         branch_total = 0
         for city_name, branches in DEMO_CITIES:
             city = get_or_create(db, City, name=city_name)
@@ -193,19 +215,6 @@ def ensure_demo_catalog() -> list[str]:
                     db.flush()
                     branch_total += 1
         summary.append(f"sucursales nuevas: {branch_total}")
-
-        # 2. Parámetros (temporadas, tallas)
-        for season_name, start, end in DEMO_SEASONS:
-            get_or_create(
-                db,
-                Season,
-                name=season_name,
-                start_date=date.fromisoformat(start),
-                end_date=date.fromisoformat(end),
-            )
-        for size_name in DEMO_CLOTHING_SIZES + DEMO_SHOE_SIZES:
-            get_or_create(db, Size, name=size_name)
-        summary.append(f"tallas: {len(DEMO_CLOTHING_SIZES + DEMO_SHOE_SIZES)}")
 
         # 3. Productos con variantes y stock por sucursal
         branches = db.scalars(select(Branch).order_by(Branch.id)).all()
@@ -348,6 +357,9 @@ def ensure_demo_purchases() -> list[str]:
     db = SessionLocal()
     summary: list[str] = []
     try:
+        if db.scalar(select(Tenant.id).limit(1)) is not None:
+            summary.append("historial multi-tenant activo (se omiten órdenes legacy globales)")
+            return summary
         client = db.scalar(select(User).where(User.email == "cliente@fashionstore.com"))
         if client is None:
             summary.append("cliente demo no existe (corre ensure_demo_users primero)")

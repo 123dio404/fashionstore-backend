@@ -13,7 +13,8 @@ def _require(model, db: Session, object_id, label: str):
 def create_product(db: Session, data: ProductCreate, tenant_id: int | None = None) -> Product:
     _require(Category, db, data.category_id, 'Category')
     if data.season_id is not None: _require(Season, db, data.season_id, 'Season')
-    if db.scalar(select(Product).where(Product.name == data.name)): raise HTTPException(409, 'Product already exists')
+    if db.scalar(select(Product).where(Product.name == data.name, Product.tenant_id == tenant_id)):
+        raise HTTPException(409, 'Product already exists in this store')
     product = Product(**data.model_dump(exclude={'variants'}), tenant_id=tenant_id)
     for item in data.variants:
         _require(Size, db, item.size_id, 'Size'); _require(Color, db, item.color_id, 'Color')
@@ -28,8 +29,8 @@ def update_product(db: Session, product: Product, data: ProductUpdate) -> Produc
     values = data.model_dump(exclude_unset=True)
     if values.get('category_id') is not None: _require(Category, db, values['category_id'], 'Category')
     if values.get('season_id') is not None: _require(Season, db, values['season_id'], 'Season')
-    if values.get('name') and values['name'] != product.name and db.scalar(select(Product).where(Product.name == values['name'])):
-        raise HTTPException(409, 'Product already exists')
+    if values.get('name') and values['name'] != product.name and db.scalar(select(Product).where(Product.name == values['name'], Product.tenant_id == product.tenant_id)):
+        raise HTTPException(409, 'Product already exists in this store')
     for key, value in values.items(): setattr(product, key, value)
     try: db.commit(); db.refresh(product)
     except IntegrityError:

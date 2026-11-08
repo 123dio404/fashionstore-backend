@@ -103,7 +103,7 @@ def add_branch(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=(
                         f"Límite alcanzado: Su Plan {sub.plan.name} solo permite un máximo de {sub.plan.max_branches} "
-                        f"sucursales activas. Actualice al Plan Profesional para habilitar hasta 10 sucursales."
+                        f"sucursales activas. Actualice al Plan Profesional (hasta 5 sucursales) o Plan Empresarial (hasta 15 sucursales)."
                     ),
                 )
     obj = Branch(**data.model_dump(), tenant_id=tenant_id)

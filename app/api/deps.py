@@ -84,8 +84,10 @@ def require_tenant(
     )
 
 def require_ai_plan(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Verifica que la empresa del usuario tenga una suscripción activa con reportes IA habilitados."""
+    """Verifica que la empresa del usuario tenga una suscripción activa con reportes IA y ML habilitados."""
     from app.models.tenant import Subscription, Tenant
+    if current_user.role == Role.SUPERADMIN and current_user.tenant_id is None:
+        return None
     tenant_id = current_user.tenant_id
     if tenant_id is None:
         first_tenant = db.query(Tenant).filter(Tenant.is_active == True).order_by(Tenant.id).first()
@@ -97,9 +99,19 @@ def require_ai_plan(db: Session = Depends(get_db), current_user: User = Depends(
         Subscription.tenant_id == tenant_id,
         Subscription.status == "Activa"
     ).first()
-    if not sub:
+    if not sub or not sub.plan:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Su empresa no cuenta con una suscripción activa para generar reportes IA."
+        )
+    if not sub.plan.has_ai_reports and current_user.role != Role.SUPERADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Función exclusiva: Su empresa cuenta actualmente con el Plan {sub.plan.name} (Bs. {sub.plan.monthly_price}/mes), "
+                "el cual no incluye Reportes Ejecutivos con IA ni Analítica Predictiva ML. "
+                "Actualice su suscripción al Plan Profesional (Bs. 69.99/mes) o Plan Empresarial (Bs. 129.99/mes) "
+                "desde el módulo 'Planes y Suscripción'."
+            )
         )
     return sub

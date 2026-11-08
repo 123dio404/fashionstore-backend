@@ -26,6 +26,8 @@ def list_categories(
         target_tenant = current.tenant_id
     elif tenant_id is not None:
         target_tenant = tenant_id
+    elif current is None or current.role != Role.SUPERADMIN:
+        target_tenant = db.scalar(select(Tenant.id).where(Tenant.status == "Activo").order_by(Tenant.id))
 
     if target_tenant is not None:
         query = query.where(Category.tenant_id == target_tenant)
