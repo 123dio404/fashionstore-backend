@@ -214,7 +214,15 @@ def change_plan(
     # Notificaciones coherentes: Superadmin (aviso financiero de cobro SaaS) y Tenant Admin (confirmación)
     try:
         from app.services.notification_service import notify_subscription_payment
-        total_amount = target_plan.monthly_price * Decimal(str(data.months))
+        # Regla de Negocio (RN-02): Descuento por ciclo prolongado (10% en semestral, 15% en anual)
+        discount_rate = Decimal("0.00")
+        if data.months >= 12:
+            discount_rate = Decimal("0.15")
+        elif data.months >= 6:
+            discount_rate = Decimal("0.10")
+        subtotal = target_plan.monthly_price * Decimal(str(data.months))
+        total_amount = (subtotal * (Decimal("1.00") - discount_rate)).quantize(Decimal("0.01"))
+
         notify_subscription_payment(
             db=db,
             tenant=tenant,
