@@ -87,6 +87,12 @@ configurar nada. Pasos:
    No hace falta definir `PORT`: Railway lo inyecta y el `docker-entrypoint.sh` lo respeta.
    Tampoco `RUN_MIGRATIONS`: por defecto es `1`, así que **el esquema se inicializa solo**
    en cada despliegue, antes de arrancar uvicorn.
+
+   La siembra SaaS (`scripts/seed_saas.py`) **no** corre por defecto para no retrasar el
+   arranque y el healthcheck. Si necesitas crear/actualizar los 9 tenants, define
+   `RUN_SEED=1` en un despliegue puntual y vuelve a quitarlo después (la siembra es
+   idempotente). También puedes ejecutarla a mano dentro del contenedor:
+   `python -m scripts.seed_saas`.
 4. **Settings → Networking → Generate Domain** → obtienes algo como
    `https://fashionstore-backend-production.up.railway.app`. Esa es la URL base de la API:
    `.../api/v1`.
