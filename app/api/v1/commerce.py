@@ -9,6 +9,8 @@ from app.schemas.commerce import (
     CartItemRequest,
     CartItemUpdate,
     CartResponse,
+    CashCloseRequest,
+    CashCloseResponse,
     CheckoutRequest,
     CustomerDeliveryConfirmation,
     DeliveryStatusUpdate,
@@ -189,6 +191,29 @@ def register_pos_sale(
         raise HTTPException(403, "Branch does not belong to user tenant")
     sale = commerce_service.pos_sale(db, user.id, data)
     return commerce_service.sale_response(db, sale)
+
+
+@router.post('/cash-close', response_model=CashCloseResponse, summary="Registrar cierre de turno y arqueo de caja POS")
+def register_cash_close(
+    data: CashCloseRequest,
+    user: User = Depends(require_role(Role.CAJERO, Role.ADMINISTRADOR, Role.ENCARGADO)),
+    db: Session = Depends(get_db),
+):
+    """
+    Registra el arqueo de caja de fin de turno del cajero y notifica:
+    - Al Administrador: Notificación detallada de recaudación, conteo y diferencias.
+    - Al Cajero: Confirmación de su cierre de turno.
+    """
+    res = commerce_service.record_cash_close(
+        db=db,
+        branch_id=data.branch_id,
+        cashier_user_id=user.id,
+        total_sales=data.total_sales,
+        sales_count=data.sales_count,
+        diff=data.difference,
+        status_text=data.status_text,
+    )
+    return CashCloseResponse(**res)
 
 
 @router.get('/reservations', response_model=list[ReservationResponse])

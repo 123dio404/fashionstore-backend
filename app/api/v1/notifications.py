@@ -25,31 +25,35 @@ def get_my_notifications(
     """
     Obtiene las notificaciones relevantes para el usuario actual:
     - Notificaciones directas a su ID de usuario.
-    - Notificaciones dirigidas al rol del usuario dentro de su empresa (tenant).
-    - Notificaciones globales dirigidas a su rol.
+    - Notificaciones dirigidas específicamente a su rol dentro de su empresa (tenant).
+    - Notificaciones globales del SaaS dirigidas a su rol (ej: comunicados del Superadmin).
     """
     role_str = current_user.role.value if current_user.role else "Cliente"
     tenant_id = current_user.tenant_id
 
-    # Filtros según jerarquía y tenant
+    # 1. Notificaciones directas asignadas a este usuario
     conditions = [Notification.user_id == current_user.id]
 
     if current_user.role == Role.SUPERADMIN:
-        # Superadmin ve notificaciones directas o globales de superadmin
+        # Superadmin ve notificaciones directas o globales de superadmin (pagos de tenants, etc.)
         conditions.append(
-            (Notification.tenant_id.is_(None)) & (Notification.target_role == Role.SUPERADMIN.value)
+            (Notification.user_id.is_(None))
+            & (Notification.tenant_id.is_(None))
+            & (Notification.target_role == Role.SUPERADMIN.value)
         )
     else:
-        # Usuarios asociados a un tenant:
-        # 1. Notificaciones dirigidas a su tenant y su rol
+        # Usuarios asociados a un tenant (Administrador, Encargado, Cajero, Cliente):
+        # 1. Notificaciones dirigidas al rol dentro de su tenant específico
         conditions.append(
-            (Notification.tenant_id == tenant_id)
-            & (or_(Notification.target_role == role_str, Notification.target_role.is_(None)))
+            (Notification.user_id.is_(None))
+            & (Notification.tenant_id == tenant_id)
+            & (Notification.target_role == role_str)
         )
-        # 2. Notificaciones globales de la plataforma para su rol
+        # 2. Notificaciones globales de la plataforma dirigidas a ese rol
         conditions.append(
-            (Notification.tenant_id.is_(None))
-            & (or_(Notification.target_role == role_str, Notification.target_role.is_(None)))
+            (Notification.user_id.is_(None))
+            & (Notification.tenant_id.is_(None))
+            & (Notification.target_role == role_str)
         )
 
     stmt = (
@@ -59,6 +63,48 @@ def get_my_notifications(
         .limit(limit)
     )
     return db.scalars(stmt).all()
+
+
+@router.post("/read-all", summary="Marcar todas las notificaciones del usuario como leídas")
+def mark_all_notifications_as_read(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Marca como leídas todas las notificaciones recibidas por el usuario actual."""
+    role_str = current_user.role.value if current_user.role else "Cliente"
+    tenant_id = current_user.tenant_id
+
+    conditions = [Notification.user_id == current_user.id]
+    if current_user.role == Role.SUPERADMIN:
+        conditions.append(
+            (Notification.user_id.is_(None))
+            & (Notification.tenant_id.is_(None))
+            & (Notification.target_role == Role.SUPERADMIN.value)
+        )
+    else:
+        conditions.append(
+            (Notification.user_id.is_(None))
+            & (Notification.tenant_id == tenant_id)
+            & (Notification.target_role == role_str)
+        )
+
+    notifs = db.scalars(select(Notification).where(or_(*conditions), Notification.is_read == False)).all()
+    for n in notifs:
+        n.is_read = True
+    db.commit()
+    return {"detail": f"{len(notifs)} notificaciones marcadas como leídas", "count": len(notifs)}
+
+
+@router.delete("/clear", summary="Limpiar notificaciones personales del usuario")
+def clear_my_notifications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Elimina las notificaciones personales directas del usuario."""
+    from sqlalchemy import delete
+    db.execute(delete(Notification).where(Notification.user_id == current_user.id))
+    db.commit()
+    return {"detail": "Historial de notificaciones personales limpiado"}
 
 
 @router.patch("/{notification_id}/read", response_model=NotificationResponse)

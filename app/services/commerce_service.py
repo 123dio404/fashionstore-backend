@@ -51,24 +51,15 @@ PAYMENT_PROVIDERS = {"mock": MockPaymentProvider()}
 
 
 def _notify_critical_stock(db: Session, branch: Branch, stock: Stock) -> None:
-    """Dispara automáticamente una notificación de stock crítico al Administrador de la tienda (Punto 3)."""
+    """Dispara automáticamente una notificación de stock crítico al Administrador y al Encargado."""
     try:
-        from app.models.notification import Notification
         from app.models.product import ProductVariant
+        from app.services.notification_service import notify_stock_critical
         variant = db.get(ProductVariant, stock.variant_id)
         prod_name = variant.product.name if variant and variant.product else f"Prenda #{stock.variant_id}"
         size_name = variant.size.name if variant and variant.size else ""
         color_name = variant.color.name if variant and variant.color else ""
-        notif = Notification(
-            tenant_id=branch.tenant_id,
-            target_role="Administrador",
-            title="⚠️ Alerta de Stock Crítico",
-            message=f"La prenda '{prod_name}' (Talla {size_name}, Color {color_name}) en la sucursal '{branch.name}' tiene solo {stock.physical_stock} unidades disponibles. Se sugiere reposición urgente.",
-            type="system",
-            link="/admin/inventory",
-            is_read=False,
-        )
-        db.add(notif)
+        notify_stock_critical(db, branch, stock, prod_name, size_name, color_name)
     except Exception:
         pass
 
@@ -277,6 +268,21 @@ def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
         cart.status = "completado"
         db.commit()
         db.refresh(sale)
+        # Notificaciones coherentes para cada actor
+        try:
+            from app.services.notification_service import notify_online_checkout
+            notify_online_checkout(
+                db=db,
+                sale=sale,
+                branch=branch,
+                client=user,
+                total=total,
+                invoice_number=f"FAC-{sale.id:012d}",
+            )
+            db.commit()
+        except Exception:
+            pass
+
         # Notificación exitosa
         get_notification_provider().send(
             event="sale.completed",
@@ -545,6 +551,23 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
         sale.payments[0].reference = f"POS-{sale.id:012d}"
     db.commit()
     db.refresh(sale)
+
+    # Notificaciones coherentes para cada actor (Cajero, Cliente, Administrador)
+    try:
+        from app.services.notification_service import notify_pos_sale
+        cashier = db.get(User, user_id)
+        notify_pos_sale(
+            db=db,
+            sale=sale,
+            branch=branch,
+            cashier=cashier,
+            client=client,
+            total=total,
+        )
+        db.commit()
+    except Exception:
+        pass
+
     return sale
 
 
@@ -600,6 +623,15 @@ def create_reservation(db: Session, user_id: int, data: ReservationCreate) -> Re
     db.add(reservation)
     db.commit()
     db.refresh(reservation)
+
+    # Notificaciones coherentes de reserva (Cliente, Encargado, Cajero)
+    try:
+        from app.services.notification_service import notify_reservation_created
+        notify_reservation_created(db=db, reservation=reservation, branch=branch, client=user)
+        db.commit()
+    except Exception:
+        pass
+
     return reservation
 
 
@@ -866,3 +898,39 @@ def confirm_customer_delivery(db: Session, sale_id: int, client_id: int, notes: 
     db.commit()
     db.refresh(sale)
     return sale
+
+
+def record_cash_close(
+    db: Session,
+    branch_id: int,
+    cashier_user_id: int,
+    total_sales: Decimal,
+    sales_count: int,
+    diff: Decimal,
+    status_text: str,
+) -> dict:
+    """Registra y notifica el cierre de turno y arqueo de caja POS."""
+    branch = db.get(Branch, branch_id)
+    if not branch:
+        raise HTTPException(404, "Branch not found")
+    cashier = db.get(User, cashier_user_id)
+
+    from app.services.notification_service import notify_cash_close
+    notify_cash_close(
+        db=db,
+        branch=branch,
+        cashier=cashier,
+        total_sales=total_sales,
+        sales_count=sales_count,
+        diff=diff,
+        status_text=status_text,
+    )
+    db.commit()
+    now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")
+    return {
+        "status": "ok",
+        "message": "Cierre de caja y arqueo registrado exitosamente",
+        "branch_id": branch_id,
+        "total_sales": total_sales,
+        "closed_at": now_str,
+    }

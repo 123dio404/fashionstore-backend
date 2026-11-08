@@ -211,6 +211,21 @@ def change_plan(
     db.commit()
     db.refresh(tenant)
 
+    # Notificaciones coherentes: Superadmin (aviso financiero de cobro SaaS) y Tenant Admin (confirmación)
+    try:
+        from app.services.notification_service import notify_subscription_payment
+        total_amount = target_plan.monthly_price * Decimal(str(data.months))
+        notify_subscription_payment(
+            db=db,
+            tenant=tenant,
+            plan=target_plan,
+            months=data.months,
+            total_amount=total_amount,
+        )
+        db.commit()
+    except Exception:
+        pass
+
     return TenantSummaryResponse(
         id=tenant.id,
         name=tenant.name,
@@ -272,6 +287,14 @@ def update_tenant_status(
 
     db.commit()
     db.refresh(tenant)
+
+    # Notificaciones de estado de empresa (Superadmin & Tenant Admin)
+    try:
+        from app.services.notification_service import notify_tenant_status_change
+        notify_tenant_status_change(db=db, tenant=tenant, new_status=clean_status)
+        db.commit()
+    except Exception:
+        pass
 
     active_b = db.scalar(
         select(func.count(Branch.id)).where(Branch.tenant_id == tenant.id, Branch.is_active == True)
@@ -362,6 +385,31 @@ def _provision_tenant(
 
     db.commit()
     db.refresh(new_tenant)
+
+    # Notificaciones: Aviso de nueva empresa al Superadmin del SaaS y bienvenida al Admin
+    try:
+        from app.services.notification_service import send_notification
+        send_notification(
+            db=db,
+            tenant_id=None,
+            target_role=Role.SUPERADMIN.value,
+            title="🏢 Nueva Empresa Registrada",
+            message=f"Se registró '{new_tenant.name}' en la plataforma con el Plan {plan.name} (Bs. {plan.monthly_price}/mes). Administrador: {data.admin_name}.",
+            notif_type="system",
+            link="/admin/tenants",
+        )
+        send_notification(
+            db=db,
+            tenant_id=new_tenant.id,
+            target_role=Role.ADMINISTRADOR.value,
+            title="👋 ¡Bienvenido a FashionStore SaaS!",
+            message=f"Tu empresa '{new_tenant.name}' está activa con el Plan {plan.name}. Puedes configurar sucursales, catálogo y personal.",
+            notif_type="system",
+            link="/admin/branches",
+        )
+        db.commit()
+    except Exception:
+        pass
 
     return TenantSummaryResponse(
         id=new_tenant.id,

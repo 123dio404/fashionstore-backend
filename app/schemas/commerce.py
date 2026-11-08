@@ -234,3 +234,24 @@ class ReservationResponse(ORMModel):
     checked_out_at: datetime | None = None
     refunded_at: datetime | None = None
     items: list[ReservationItemResponse] = []
+
+
+class CashCloseRequest(BaseModel):
+    branch_id: int
+    initial_amount: Decimal = Decimal("0.00")
+    cash_sales: Decimal = Decimal("0.00")
+    card_sales: Decimal = Decimal("0.00")
+    qr_sales: Decimal = Decimal("0.00")
+    total_sales: Decimal = Decimal("0.00")
+    sales_count: int = 0
+    counted_amount: Decimal = Decimal("0.00")
+    difference: Decimal = Decimal("0.00")
+    status_text: str = "Cuadrado exacto (Sin diferencias)"
+
+
+class CashCloseResponse(BaseModel):
+    status: str
+    message: str
+    branch_id: int
+    total_sales: Decimal
+    closed_at: str
