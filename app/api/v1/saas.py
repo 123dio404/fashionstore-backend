@@ -33,6 +33,21 @@ def list_plans(include_inactive: bool = False, db: Session = Depends(get_db)):
     return db.scalars(query).all()
 
 
+@router.get("/stores")
+def list_public_stores(db: Session = Depends(get_db)):
+    """Directorio público de tiendas SaaS activas para clientes y la app móvil."""
+    tenants = db.scalars(select(Tenant).where(Tenant.status == "Activo").order_by(Tenant.id)).all()
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "slug": t.slug,
+            "plan": t.plan.name if t.plan else "Básico",
+        }
+        for t in tenants
+    ]
+
+
 @router.post("/plans", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
 def create_plan(
     data: PlanCreate,
