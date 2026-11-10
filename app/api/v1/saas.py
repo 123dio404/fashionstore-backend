@@ -42,7 +42,11 @@ def list_public_stores(db: Session = Depends(get_db)):
             "id": t.id,
             "name": t.name,
             "slug": t.slug,
-            "plan": t.plan.name if t.plan else "Básico",
+            "plan": (
+                t.subscription.plan.name
+                if t.subscription and t.subscription.plan
+                else "Básico"
+            ),
         }
         for t in tenants
     ]
