@@ -52,6 +52,7 @@ os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get('/health', tags=['health'])
+@app.head('/health', tags=['health'])
 def health() -> dict[str, Any]:
     return {
         'status': 'ok',
