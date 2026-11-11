@@ -7,7 +7,7 @@ from app.models.commerce import Sale
 from app.models.user import Role, User
 from app.schemas.commerce import SaleResponse
 from app.schemas.sync import SyncBatchRequest, SyncBatchResponse
-from app.services.sync_service import process_sync_batch
+from app.services.sync_service import process_sync_batch, resolve_conflict as resolve_conflict_service
 from app.services import commerce_service
 
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -57,12 +57,21 @@ def list_conflicts(
 @router.post("/conflicts/{sale_id}/resolve", response_model=SaleResponse, dependencies=[staff])
 def resolve_conflict(
     sale_id: int,
-    action: str = "compensar_administrativo",
+    action: str = "compensar",
+    note: str | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Marca un conflicto de sobreventa offline como resuelto administrativamente.
+    Resuelve un conflicto de sobreventa offline con compensación real.
+
+    - `compensar` (por defecto): reembolsa el cobro, anula la venta y notifica
+      al cliente afectado.
+    - `reasignar`: intenta descontar stock atómicamente y confirma la venta si
+      todavía hay disponibilidad.
+
+    Regla de prioridad RN-05: la primera venta que logra el descuento atómico
+    conserva la unidad; la segunda debe compensarse o reasignarse.
     """
     sale = db.get(Sale, sale_id)
     if not sale:
@@ -70,7 +79,12 @@ def resolve_conflict(
     if user.tenant_id is not None and sale.tenant_id != user.tenant_id:
         raise HTTPException(status_code=403, detail="La venta pertenece a otra empresa")
 
-    sale.sync_status = "RESUELTO_ADMIN"
-    db.commit()
-    db.refresh(sale)
-    return commerce_service.sale_response(db, sale)
+    resolved = resolve_conflict_service(
+        db,
+        sale,
+        action=action,
+        user=user,
+        note=note,
+    )
+    db.refresh(resolved)
+    return commerce_service.sale_response(db, resolved)

@@ -454,6 +454,8 @@ def sale_response(db: Session, sale: Sale) -> SaleResponse:
         sale_date=sale.sale_date,
         total=sale.total,
         sale_type=st,
+        sync_status=getattr(sale, "sync_status", "CONFIRMADO") or "CONFIRMADO",
+        offline_uuid=getattr(sale, "offline_uuid", None),
         delivery_status=getattr(sale, "delivery_status", "PAGADO") or "PAGADO",
         customer_notes=getattr(sale, "customer_notes", None),
         tax_id=getattr(sale, "tax_id", None) or "0",

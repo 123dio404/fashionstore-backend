@@ -7,7 +7,7 @@
 
 ## 1. Aspectos Generales y Descripción del Sistema
 * **Nombre del Producto:** **FashionStore SaaS**
-* **Definición:** Plataforma de comercio electrónico multitenant para empresas de indumentaria textil bajo el modelo Software as a Service (SaaS). Incorpora gestión de suscripciones (Planes Básico y Profesional), clientes con soporte offline (PWA con IndexedDB y Móvil Flutter con SQLite), motor de sincronización e idempotencia para ventas de contado y reservas, políticas postventa para cambio de prendas, analítica inteligente con Machine Learning (datos sintéticos, modelos supervisados y no supervisados) y reportes generativos mediante IA en lenguaje natural (texto y voz).
+* **Definición:** Plataforma de comercio electrónico multitenant para empresas de indumentaria textil bajo el modelo Software as a Service (SaaS). Incorpora gestión de suscripciones (Planes Básico, Profesional y Empresarial), clientes con soporte offline (PWA con IndexedDB y Móvil Flutter con SQLite), motor de sincronización e idempotencia para ventas de contado y reservas, políticas postventa para cambio de prendas, analítica inteligente con Machine Learning (datos sintéticos, modelos supervisados y no supervisados) y reportes generativos mediante IA en lenguaje natural (texto y voz).
 * **Metodología y Modelado:** Metodología **ICONIX** y estándar **UML 2.5+**.
 
 ---
@@ -40,12 +40,12 @@
 
 #### PAQ-01: Gestión SaaS y Multitenant
 * **RF01:** Registrar empresas contratantes (tenants) con datos fiscales y administrador inicial.
-* **RF02:** Administrar catálogo de planes de suscripción (Básico y Profesional).
+* **RF02:** Administrar catálogo de planes de suscripción (Básico, Profesional y Empresarial).
 * **RF03:** Asignar y cambiar planes de suscripción con fechas de inicio y vencimiento.
 * **RF04:** Restringir operaciones y recursos automáticamente según los límites del plan contratado.
 
 #### PAQ-02: Organización y Usuarios
-* **RF05:** Registrar y administrar sucursales por empresa (máximo 2 en Básico, máximo 10 en Profesional).
+* **RF05:** Registrar y administrar sucursales por empresa (máximo 2 en Básico, 5 en Profesional y 15 en Empresarial).
 * **RF06:** Gestionar usuarios con roles (`Superadmin`, `Tenant Admin`, `Cajero`, `Cliente`).
 * **RF07:** Aislar la información impidiendo accesos cruzados entre empresas en todo el backend.
 
@@ -84,7 +84,7 @@
 * **RF25:** Disponer de al menos 4 tipos de reportes demostrables con datos reales de la base de datos.
 * **RF26:** Visualizar resultados en tablas y gráficos seleccionados dinámicamente.
 * **RF27:** Exportar los reportes generados a formatos PDF y Excel.
-* **RF28:** Restringir el acceso a reportes con IA únicamente a tenants con Plan Profesional.
+* **RF28:** Restringir el acceso a reportes con IA a tenants con Plan Profesional o Empresarial; el Plan Básico recibe HTTP 403.
 
 ---
 
@@ -109,11 +109,12 @@
 
 * **RN-01 (Aislamiento Estricto):** Ningún usuario de una Empresa A podrá ver, modificar o eliminar registros de una Empresa B.
 * **RN-02 (Límites por Plan de Suscripción):**
-  * **Plan Básico:** Hasta 2 sucursales activas. Sin reportes generativos de IA.
-  * **Plan Profesional:** Hasta 10 sucursales activas. Con reportes generativos de IA habilitados.
+  * **Plan Básico:** Bs. 29.99/mes · hasta 2 sucursales activas · sin reportes generativos de IA.
+  * **Plan Profesional:** Bs. 69.99/mes · hasta 5 sucursales activas · con reportes generativos de IA.
+  * **Plan Empresarial:** Bs. 129.99/mes · hasta 15 sucursales activas · con reportes generativos de IA.
 * **RN-03 (Ventas Offline):** Las ventas registradas sin conexión son obligatoriamente de contado (efectivo).
 * **RN-04 (Idempotencia Transaccional):** Toda operación offline lleva un UUID v4 generado en cliente. Transacciones repetidas se confirman sin reprocesar inventario.
-* **RN-05 (Gestión de Conflictos):** Si al sincronizar una venta offline no hay stock central suficiente, la operación se marca en estado `CONFLICTO` para ajuste administrativo.
+* **RN-05 (Gestión de Conflictos):** El stock se descuenta con una operación atómica y condicional (`stock_actual - stock_reservado >= cantidad`). La primera venta que completa el descuento conserva la unidad; la segunda se registra como `CONFLICTO` sin sobreventa, con pago pendiente y sin reintento automático. El administrador resuelve el conflicto con `compensar` (reembolso y notificación al cliente) o `reasignar` (si reapareció stock, confirma la venta).
 * **RN-06 (Plazo Máximo de Cambio):** Solo se admiten cambios de prendas si la venta original tiene una antigüedad menor o igual a 30 días.
 * **RN-07 (Doble Esquema de Precios):** Las prendas cuentan con precio minorista y mayorista. El precio mayorista se activa de forma automática cuando el cliente alcanza la cantidad mínima umbral en su carrito.
 * **RN-08 (Descuento de Stock Condicional):** En pedidos en línea, el stock físico permanece en reserva/intacto y se descuenta únicamente tras la confirmación exitosa de la pasarela de pagos.
@@ -139,7 +140,7 @@
 
 ### PAQ-04: Operaciones Offline y Sincronización
 * **CU-09:** Habilitar catálogo y existencias fuera de línea — *Actor: Cajero / Cliente* [WEB / MOVIL]
-* **CU-10:** Registrar venta de contado fuera de línea — *Actor: Cajero* [WEB / MOVIL]
+* **CU-10:** Registrar venta de contado fuera de línea — *Actor: Cajero / Encargado (WEB) · Cliente (MOVIL)* [WEB / MOVIL]
 * **CU-11:** Registrar reserva de prendas fuera de línea — *Actor: Cajero / Cliente* [WEB / MOVIL]
 * **CU-12:** Monitorear operaciones pendientes de sincronización — *Actor: Cajero* [WEB / MOVIL]
 * **CU-13:** Sincronizar transacciones locales con la nube — *Actor: Cajero / Sistema* [WEB / MOVIL]
@@ -158,6 +159,46 @@
 * **CU-20:** Generar reporte analítico asistido por IA (Texto / Voz) — *Actor: Administrador de Empresa* [WEB / MOVIL]
 * **CU-21:** Explorar resultados analíticos en tablas y gráficos dinámicos — *Actor: Administrador de Empresa* [WEB]
 * **CU-22:** Exportar informes gerenciales a PDF y Excel — *Actor: Administrador de Empresa* [WEB]
+
+### 6.1 Especificación detallada del CU-10 — Registrar venta de contado fuera de línea
+
+**Actores**
+* **Primario (WEB):** Cajero / Encargado con caja abierta en el POS.
+* **Primario (MÓVIL):** Cliente autenticado que compra de contado; la app móvil es *purchase-only*, no abre caja ni ejecuta arqueo.
+* **Sistema:** `SyncManagerService` (web, IndexedDB) / `SyncManager` (móvil, SQLite) y `POST /api/v1/sync/batch` (`process_sync_batch`).
+
+**Precondiciones**
+1. Usuario autenticado con rol `Cajero`, `Encargado`, `Administrador` o `Cliente` según el canal, y `tenant_id` activo.
+2. Sucursal existente, activa y perteneciente al tenant de la sesión.
+3. Copia local de catálogo y existencias descargada previamente (CU-09). En web, la caja debe haberse abierto al menos una vez con conexión.
+4. Al menos una línea de venta con `stock_id` real y disponibilidad en la copia local.
+5. Dispositivo sin conectividad, o checkout remoto fallido antes de confirmar la venta.
+
+**Flujo principal**
+1. El cajero selecciona la sucursal/caja y agrega prendas por variante, SKU o lector de barras.
+2. El sistema valida que cada línea pertenezca a la sucursal y que `cantidad <= available_stock` local.
+3. El cajero elige **Efectivo** (único método habilitado sin conexión, RN-03) y confirma el cobro.
+4. El cliente móvil confirma la compra con método efectivo; la app fuerza este método si perdió la red.
+5. El cliente de sincronización genera un **UUID v4** y guarda la operación como `LOCAL` en IndexedDB/SQLite.
+6. El sistema descuenta el espejo local de existencias, actualiza el arqueo de caja (solo web) y emite un **comprobante provisional** con UUID, fecha, sucursal, cajero, ítems y total.
+7. Al recuperar la conexión, el cliente envía el lote a `POST /api/v1/sync/batch`.
+8. El backend valida tenant, sucursal activa, método de pago efectivo, idempotencia del UUID y disponibilidad central.
+9. El backend descuenta el stock con `UPDATE ... WHERE stock_actual - stock_reservado >= cantidad`, crea `Sale`, `SaleItem`, `SalePayment` e `InventoryMovement`, y responde `CONFIRMADO`.
+10. El cliente marca la operación como `CONFIRMADO` y el comprobante definitivo reemplaza al provisional.
+
+**Flujos alternativos**
+* **A1 — Stock local insuficiente:** el cobro se bloquea con el disponible real; se pide ajustar cantidad o reconectar.
+* **A2 — Sucursal inactiva o sin copia local:** el cobro se bloquea; se solicita abrir caja con conexión al menos una vez.
+* **A3 — Método distinto de efectivo sin conexión:** la UI deshabilita tarjeta, QR y datáfono; si llegara al backend, la operación se marca `CONFLICTO`, no se descuenta stock y el pago queda `pendiente`.
+* **A4 — UUID ya procesado (reintento o doble clic):** el backend responde `DUPLICADO_IDEMPOTENTE`; no se crea otra venta ni se vuelve a descontar inventario (RNF05).
+* **A5 — UUID usado por otra empresa:** se rechaza como `CONFLICTO`; el inventario de ambas empresas permanece intacto (RN-01).
+* **A6 — Sin stock central al sincronizar (dos dispositivos, última unidad):** la primera operación que completa el descuento atómico gana; la segunda queda `CONFLICTO` sin sobreventa. El administrador resuelve con `compensar` (reembolso + notificación al cliente) o `reasignar` (si reapareció stock).
+* **A7 — Falla de red durante la sincronización:** la operación permanece `LOCAL` y se reintenta; el UUID evita duplicados.
+
+**Postcondiciones**
+* **Éxito:** venta registrada una sola vez, stock local y central descontados atómicamente, movimiento de inventario `venta`, pago `completado`, arqueo actualizado (web) y comprobante provisional + definitivo emitidos.
+* **Conflicto:** venta en estado `CONFLICTO` con pago `pendiente`; no hay sobreventa. Tras la resolución administrativa, la venta queda `RESUELTO_ADMIN` con pago `reembolsado` (compensación) o `completado` (reasignación), y el cliente afectado recibe notificación.
+* **Idempotencia:** un reenvío del mismo UUID no altera stock, ventas ni movimientos.
 
 ---
 
@@ -240,9 +281,8 @@
 * **Web (Angular PWA):** Persistencia en **IndexedDB** para almacenar:
   * Catálogo descargado (productos, variantes y precios).
   * Inventario local conocido.
-  * Cola de transacciones locales pendientes (`sync_queue`), incluyendo el tenant asociado.
-* **Móvil (Flutter):** Persistencia en **SQLite** (`sqflite`) con esquema réplica para catálogo y cola de transacciones locales, asociando cada operación al tenant y sucursal.
-* **PWA instalable:** El manifiesto declara iconos de 192×192 y 512×512; el Service Worker conserva el app shell y los recursos de mismo origen visitados, y usa `index.html` como fallback de navegación offline.
+  * Cola de transacciones locales pendientes (`sync_queue`).
+* **Móvil (Flutter):** Persistencia en **SQLite** (`sqflite`) con esquema réplica para catálogo y cola de transacciones locales.
 
 ### 9.2 Protocolo de Sincronización e Idempotencia
 1. Cada transacción offline genera en el cliente un identificador universal único (**UUID v4**).
@@ -253,7 +293,6 @@
    * `CONFLICTO`: Discrepancia detectada (ej. stock central insuficiente).
 3. **Idempotencia (RNF05):** Si el servidor recibe una transacción con un UUID ya registrado previamente, no vuelve a decrementar el inventario ni a duplicar la venta; simplemente responde con la confirmación de la venta existente.
 4. **Resolución de Conflictos de Stock (RN-05):** Si el inventario central es insuficiente para cubrir la venta registrada offline, la transacción se almacena en estado `CONFLICTO`, generando una alerta de inventario y notificación al administrador para compensación administrativa.
-5. **Aislamiento de cola:** El cliente solo reintenta operaciones cuyo tenant coincide con la sesión activa. El `tenant_id` local sirve para asociar y filtrar la cola; la autorización real se valida en backend mediante la sesión y la pertenencia de la sucursal, nunca confiando en el valor enviado por el cliente.
 
 ---
 
@@ -278,7 +317,7 @@
 1. **Entrada:** Lenguaje natural escrito en campo de búsqueda o dictado por voz utilizando **Web Speech API** en el navegador.
 2. **Procesamiento en Backend:**
    * Recepción del texto de consulta.
-   * Validación de plan: si el tenant posee Plan Básico, se retorna HTTP 403.
+   * Validación de plan: si el tenant posee Plan Básico (sin `has_ai_reports`), se retorna HTTP 403; los planes Profesional y Empresarial tienen acceso habilitado.
    * El servicio de IA analiza la intención y genera los filtros de la consulta inyectando de forma estricta e inmutable el `tenant_id` actual.
 3. **Mínimo 4 Reportes Demostrables:**
    * Ventas agrupadas por sucursal en un período determinado.
