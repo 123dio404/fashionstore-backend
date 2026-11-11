@@ -142,6 +142,8 @@ class SaleResponse(ORMModel):
     sale_date: datetime
     total: Decimal
     sale_type: str = "pos"
+    sync_status: str = "CONFIRMADO"
+    offline_uuid: str | None = None
     delivery_status: str = "PAGADO"
     customer_notes: str | None = None
     tax_id: str | None = None

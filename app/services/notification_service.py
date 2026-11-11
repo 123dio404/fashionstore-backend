@@ -212,6 +212,83 @@ def notify_reservation_created(
     )
 
 
+def notify_offline_conflict_resolved(
+    db: Session,
+    sale: Sale,
+    branch: Branch | None,
+    client: User | None,
+    cashier: User | None,
+    *,
+    resolution: str,
+    refunded: bool,
+    note: str | None = None,
+) -> None:
+    """Notifica la resolución de un conflicto de sobreventa offline.
+
+    - Cliente afectado: recibe el reembolso o la confirmación de su compra.
+    - Cajero que registró la venta: sabe qué hacer en caja.
+    - Administrador: queda auditoría de la compensación aplicada.
+    """
+    branch_name = branch.name if branch else f"Sucursal #{sale.branch_id}"
+    tenant_id = sale.tenant_id
+    uuid8 = (sale.offline_uuid or str(sale.id))[:8]
+    detail = f"Venta offline #{sale.id} (UUID {uuid8}) en '{branch_name}' por Bs. {sale.total:.2f}."
+
+    if refunded:
+        client_title = "💸 Reembolso de venta sin conexión"
+        client_message = (
+            f"La unidad de tu compra ({detail}) ya no estaba disponible al sincronizar. "
+            "Se procesó el reembolso completo en efectivo. Disculpa el inconveniente."
+        )
+        admin_title = "✅ Conflicto offline compensado (reembolso)"
+        admin_message = f"{detail} Se reembolsó al cliente porque otra venta confirmó primero la última unidad."
+    else:
+        client_title = "✅ Compra sin conexión confirmada"
+        client_message = f"{detail} Se validó el stock central y tu compra quedó confirmada."
+        admin_title = "✅ Conflicto offline reasignado"
+        admin_message = f"{detail} Se reasignó stock y la venta quedó confirmada."
+
+    if note:
+        admin_message = f"{admin_message} Nota: {note}"
+
+    # 1. Cliente afectado (si la venta tiene un cliente registrado)
+    if sale.client_id:
+        send_notification(
+            db=db,
+            tenant_id=tenant_id,
+            user_id=sale.client_id,
+            target_role=Role.CLIENTE.value,
+            title=client_title,
+            message=client_message,
+            notif_type="purchase_success" if not refunded else "system",
+            link="/purchases",
+        )
+
+    # 2. Cajero que registró la operación
+    if sale.user_id and sale.user_id != sale.client_id:
+        send_notification(
+            db=db,
+            tenant_id=tenant_id,
+            user_id=sale.user_id,
+            target_role=Role.CAJERO.value,
+            title="⚖️ Conflicto offline resuelto",
+            message=f"{detail} Resolución: {resolution}.",
+            notif_type="system",
+            link="/admin/sync-conflicts",
+        )
+
+    # 3. Administrador (auditoría de la compensación)
+    send_notification(
+        db=db,
+        tenant_id=tenant_id,
+        target_role=Role.ADMINISTRADOR.value,
+        title=admin_title,
+        message=admin_message,
+        notif_type="system",
+        link="/admin/sync-conflicts",
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Eventos de Caja / Arqueo                                                    #
 # --------------------------------------------------------------------------- #
