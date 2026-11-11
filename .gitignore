@@ -30,6 +30,10 @@ htmlcov/
 *.sqlite
 *.sqlite3
 
+# Uploads directory
+uploads/*
+!uploads/.gitkeep
+
 # Build / packaging
 build/
 dist/

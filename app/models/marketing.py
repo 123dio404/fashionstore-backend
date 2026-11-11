@@ -26,6 +26,7 @@ promotion_products = Table(
 class Collection(Base):
     __tablename__ = "coleccion"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column("id_empresa", ForeignKey("empresa.id", ondelete="CASCADE"), nullable=True, index=True)
     name: Mapped[str] = mapped_column("nombre", String(150), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column("descripcion", Text, nullable=True)
     is_active: Mapped[bool] = mapped_column("estado", Boolean, default=True, nullable=False, index=True)
@@ -39,6 +40,7 @@ class Collection(Base):
 class Promotion(Base):
     __tablename__ = "promocion"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column("id_empresa", ForeignKey("empresa.id", ondelete="CASCADE"), nullable=True, index=True)
     name: Mapped[str] = mapped_column("nombre", String(150), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column("descripcion", Text, nullable=True)
     discount_type: Mapped[str] = mapped_column("tipo_descuento", String(20), nullable=False, default="percentage")

@@ -14,7 +14,8 @@ class Category(Base):
     __tablename__ = "categoria"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column("nombre", String(100), unique=True, index=True)
+    tenant_id: Mapped[int | None] = mapped_column("id_empresa", ForeignKey("empresa.id", ondelete="CASCADE"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column("nombre", String(100), index=True)
 
     products: Mapped[list["Product"]] = relationship(back_populates="category")
 
@@ -46,12 +47,20 @@ class Product(Base):
     __tablename__ = "producto"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column("id_empresa", ForeignKey("empresa.id", ondelete="CASCADE"), nullable=True, index=True)
     category_id: Mapped[int] = mapped_column("id_categoria", ForeignKey("categoria.id", ondelete="RESTRICT"))
     season_id: Mapped[int | None] = mapped_column("id_temporada", ForeignKey("temporada.id", ondelete="SET NULL"), nullable=True)
     name: Mapped[str] = mapped_column("nombre", String(150), index=True)
     brand: Mapped[str | None] = mapped_column("marca", String(100), nullable=True)
     price: Mapped[Decimal] = mapped_column("precio", Numeric(12, 2))
+    wholesale_price: Mapped[Decimal | None] = mapped_column("precio_mayor", Numeric(12, 2), nullable=True)
+    wholesale_min_quantity: Mapped[int] = mapped_column("cantidad_min_mayor", Integer, default=3, nullable=False)
+    material: Mapped[str | None] = mapped_column("material", String(100), nullable=True)
+    secondary_color: Mapped[str | None] = mapped_column("color_secundario", String(50), nullable=True)
+    is_clearance: Mapped[bool] = mapped_column("es_liquidacion", Boolean, default=False, nullable=False)
+    discount_percentage: Mapped[Decimal] = mapped_column("porcentaje_descuento", Numeric(5, 2), default=Decimal("0.00"), nullable=False)
     is_active: Mapped[bool] = mapped_column("estado", Boolean, default=True, nullable=False)
+    image_url: Mapped[str | None] = mapped_column("imagen_url", Text, nullable=True)
     model_3d_url: Mapped[str | None] = mapped_column("modelo_3d_url", String(500), nullable=True)
     model_3d_format: Mapped[str | None] = mapped_column("modelo_3d_formato", String(10), nullable=True)
     technical_metadata: Mapped[str | None] = mapped_column("metadatos_tecnicos", Text, nullable=True)
@@ -62,6 +71,10 @@ class Product(Base):
     variants: Mapped[list["ProductVariant"]] = relationship(
         back_populates="product", cascade="all, delete-orphan"
     )
+
+    @property
+    def category_name(self) -> str | None:
+        return self.category.name if self.category else None
 
 
 class ProductVariant(Base):

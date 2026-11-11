@@ -22,16 +22,18 @@ def collection(db: Session, collection_id: int):
     return obj
 
 
-def list_collections(db: Session, active_only=False):
+def list_collections(db: Session, active_only=False, tenant_id: int | None = None):
     query = select(Collection).options(selectinload(Collection.products)).order_by(Collection.id)
     if active_only:
         query = query.where(Collection.is_active.is_(True))
+    if tenant_id is not None:
+        query = query.where(Collection.tenant_id == tenant_id)
     return list(db.scalars(query).all())
 
 
-def create_collection(db: Session, data: CollectionCreate, product_ids=None):
+def create_collection(db: Session, data: CollectionCreate, product_ids=None, tenant_id: int | None = None):
     values = data.model_dump(exclude={"product_ids"})
-    obj = Collection(**values, products=_products(db, product_ids if product_ids is not None else data.product_ids))
+    obj = Collection(**values, tenant_id=tenant_id, products=_products(db, product_ids if product_ids is not None else data.product_ids))
     db.add(obj); db.commit(); db.refresh(obj)
     return collection(db, obj.id)
 
@@ -52,17 +54,19 @@ def promotion(db: Session, promotion_id: int):
     return obj
 
 
-def list_promotions(db: Session, active_only=False):
+def list_promotions(db: Session, active_only=False, tenant_id: int | None = None):
     today = date.today()
     query = select(Promotion).options(selectinload(Promotion.products)).order_by(Promotion.id)
     if active_only:
         query = query.where(Promotion.is_active.is_(True), (Promotion.start_date.is_(None) | (Promotion.start_date <= today)), (Promotion.end_date.is_(None) | (Promotion.end_date >= today)))
+    if tenant_id is not None:
+        query = query.where(Promotion.tenant_id == tenant_id)
     return list(db.scalars(query).all())
 
 
-def create_promotion(db: Session, data: PromotionCreate, product_ids=None):
+def create_promotion(db: Session, data: PromotionCreate, product_ids=None, tenant_id: int | None = None):
     values = data.model_dump(exclude={"product_ids"})
-    obj = Promotion(**values, products=_products(db, product_ids if product_ids is not None else data.product_ids))
+    obj = Promotion(**values, tenant_id=tenant_id, products=_products(db, product_ids if product_ids is not None else data.product_ids))
     db.add(obj); db.commit(); db.refresh(obj)
     return promotion(db, obj.id)
 

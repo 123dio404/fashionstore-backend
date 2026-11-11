@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from app.api.deps import get_current_user, get_db, require_role
+from app.api.deps import get_current_user, get_db, get_optional_current_user, require_role
+from app.models.branch import Branch
 from app.models.inventory import InventoryMovement, MovementType, Stock
+from app.models.product import Product, ProductVariant
+from app.models.tenant import Tenant
 from app.models.user import Role, User
 from app.schemas.inventory import MovementCreate, MovementResponse, StockAdjustment, StockResponse, TransferRequest
 from app.services.inventory_service import adjust_stock, transfer_stock
@@ -13,15 +16,47 @@ def stock_response(stock: Stock) -> StockResponse:
     return StockResponse(id=stock.id,branch_id=stock.branch_id,variant_id=stock.variant_id,size_id=stock.size_id,physical_stock=stock.physical_stock,reserved_stock=stock.reserved_stock,available_stock=stock.physical_stock-stock.reserved_stock)
 
 @router.get('/stock',response_model=list[StockResponse])
-def list_stock(branch_id: int|None=None, variant_id: int|None=None, db:Session=Depends(get_db)):
-    query=select(Stock).order_by(Stock.updated_at)
-    if branch_id: query=query.where(Stock.branch_id==branch_id)
-    if variant_id: query=query.where(Stock.variant_id==variant_id)
+def list_stock(
+    branch_id: int | None = None,
+    variant_id: int | None = None,
+    tenant_id: int | None = None,
+    current: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    query = (
+        select(Stock)
+        .join(ProductVariant, Stock.variant_id == ProductVariant.id)
+        .join(Product, ProductVariant.product_id == Product.id)
+        .order_by(Stock.updated_at)
+    )
+    effective_tenant = tenant_id or (current.tenant_id if current else None)
+    if effective_tenant is not None:
+        branch_ids = select(Branch.id).where(Branch.tenant_id == effective_tenant)
+        query = query.where(Stock.branch_id.in_(branch_ids), Product.tenant_id == effective_tenant)
+    else:
+        first_tenant = db.scalar(select(Tenant.id).where(Tenant.status == "Activo").order_by(Tenant.id))
+        if first_tenant:
+            branch_ids = select(Branch.id).where(Branch.tenant_id == first_tenant)
+            query = query.where(Stock.branch_id.in_(branch_ids), Product.tenant_id == first_tenant)
+    if branch_id:
+        query = query.where(Stock.branch_id == branch_id)
+    if variant_id:
+        query = query.where(Stock.variant_id == variant_id)
     return [stock_response(x) for x in db.scalars(query).all()]
+
 @router.get('/stock/{stock_id}',response_model=StockResponse)
-def get_stock(stock_id: int,db:Session=Depends(get_db)):
-    obj=db.get(Stock,stock_id)
-    if not obj: raise HTTPException(404,'Stock not found')
+def get_stock(
+    stock_id: int,
+    current: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    obj = db.get(Stock, stock_id)
+    if not obj:
+        raise HTTPException(404, 'Stock not found')
+    if current is not None and current.tenant_id is not None:
+        branch = db.get(Branch, obj.branch_id)
+        if not branch or branch.tenant_id != current.tenant_id:
+            raise HTTPException(404, 'Stock not found')
     return stock_response(obj)
 @router.post('/movements/adjustment',response_model=StockResponse,dependencies=[operator])
 def adjustment(data:StockAdjustment,db:Session=Depends(get_db),current:User=Depends(get_current_user)):
@@ -52,8 +87,16 @@ def transfer(data:TransferRequest,db:Session=Depends(get_db),current:User=Depend
 def transfer_alias(data:TransferRequest,db:Session=Depends(get_db),current:User=Depends(get_current_user)):
     return transfer_stock(db,data,current.id)
 @router.get('/movements',response_model=list[MovementResponse])
-def movements(variant_id: int|None=None, branch_id: int|None=None, db:Session=Depends(get_db)):
+def movements(
+    variant_id: int|None=None,
+    branch_id: int|None=None,
+    current: User|None=Depends(get_optional_current_user),
+    db:Session=Depends(get_db),
+):
     query = select(InventoryMovement).join(Stock, Stock.id == InventoryMovement.inventory_id).order_by(InventoryMovement.created_at.desc())
     if variant_id: query = query.where(Stock.variant_id == variant_id)
     if branch_id: query = query.where(Stock.branch_id == branch_id)
+    if current is not None and current.tenant_id is not None:
+        branch_ids = select(Branch.id).where(Branch.tenant_id == current.tenant_id)
+        query = query.where(Stock.branch_id.in_(branch_ids))
     return list(db.scalars(query).all())

@@ -1,10 +1,13 @@
 import json
+import time
 from abc import ABC, abstractmethod
 
 import httpx
 from fastapi import HTTPException
 
 from app.core.config import settings
+
+_GEMINI_FAIL_UNTIL: float = 0.0
 
 
 class AIProvider(ABC):
@@ -47,23 +50,30 @@ class DisabledAIProvider(AIProvider):
 
 class GeminiProvider(AIProvider):
     def generate_text(self, prompt: str) -> str:
+        global _GEMINI_FAIL_UNTIL
         if not settings.gemini_api_key:
             raise HTTPException(503, "Gemini is enabled but GEMINI_API_KEY is not configured")
+        if time.monotonic() < _GEMINI_FAIL_UNTIL:
+            raise HTTPException(502, "Gemini circuit-breaker active; using local AI fallback")
+        model_name = settings.gemini_model or "gemini-2.0-flash"
+        if "3.8" in model_name:
+            model_name = "gemini-2.0-flash"
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{settings.gemini_model}:generateContent"
+            f"{model_name}:generateContent"
         )
         try:
             response = httpx.post(
                 url,
                 params={"key": settings.gemini_api_key},
                 json={"contents": [{"parts": [{"text": prompt}]}]},
-                timeout=30,
+                timeout=3.0,
             )
             response.raise_for_status()
             payload = response.json()
             return payload["candidates"][0]["content"]["parts"][0]["text"]
         except (httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
+            _GEMINI_FAIL_UNTIL = time.monotonic() + 300.0
             raise HTTPException(502, "Gemini request failed") from exc
 
 

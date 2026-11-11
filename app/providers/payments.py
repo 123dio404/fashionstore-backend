@@ -45,6 +45,11 @@ IN_STORE_PAYMENT_METHODS: dict[str, str] = {
     "tarjeta_debito": "tarjeta",
     "datafono": "datafono",
     "datáfono": "datafono",
+    "qr": "qr",
+    "stripe_qr": "qr",
+    "stripe": "tarjeta",
+    "simulado": "tarjeta",
+    "simulada": "tarjeta",
 }
 
 

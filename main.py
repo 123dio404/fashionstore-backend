@@ -1,7 +1,10 @@
 import logging
+import os
 from contextlib import asynccontextmanager
+from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import Base, engine
@@ -45,5 +48,39 @@ app.add_middleware(
 )
 app.include_router(api_router)
 
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 @app.get('/health', tags=['health'])
-def health() -> dict[str,str]: return {'status':'ok'}
+@app.head('/health', tags=['health'])
+def health() -> dict[str, Any]:
+    return {
+        'status': 'ok',
+        'commit': os.environ.get('RENDER_GIT_COMMIT', '')[:7] or 'unknown',
+    }
+
+
+@app.get('/health/schema', tags=['health'])
+def health_schema() -> dict[str, Any]:
+    """Diagnóstico: columnas que deben existir tras la sincronización de arranque."""
+    from sqlalchemy import inspect
+
+    expected = {
+        'categoria': ['id_empresa'],
+        'producto': ['imagen_url'],
+    }
+    inspector = inspect(engine)
+    missing: list[str] = []
+    for table, columns in expected.items():
+        if not inspector.has_table(table):
+            missing.append(f'{table} (tabla ausente)')
+            continue
+        existing = {column['name'] for column in inspector.get_columns(table)}
+        for column in columns:
+            if column not in existing:
+                missing.append(f'{table}.{column}')
+    return {
+        'ok': not missing,
+        'commit': os.environ.get('RENDER_GIT_COMMIT', '')[:7] or 'unknown',
+        'missing': missing,
+    }

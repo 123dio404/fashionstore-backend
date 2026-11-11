@@ -50,11 +50,48 @@ class MockPaymentProvider:
 PAYMENT_PROVIDERS = {"mock": MockPaymentProvider()}
 
 
+def _notify_critical_stock(db: Session, branch: Branch, stock: Stock) -> None:
+    """Dispara automáticamente una notificación de stock crítico al Administrador y al Encargado."""
+    try:
+        from app.models.product import ProductVariant
+        from app.services.notification_service import notify_stock_critical
+        variant = db.get(ProductVariant, stock.variant_id)
+        prod_name = variant.product.name if variant and variant.product else f"Prenda #{stock.variant_id}"
+        size_name = variant.size.name if variant and variant.size else ""
+        color_name = variant.color.name if variant and variant.color else ""
+        notify_stock_critical(db, branch, stock, prod_name, size_name, color_name)
+    except Exception:
+        pass
+
+
 def _stock(db: Session, stock_id: int) -> Stock:
     stock = db.get(Stock, stock_id)
     if stock is None:
         raise HTTPException(404, "Stock record not found")
     return stock
+
+
+def calculate_item_unit_price(product, quantity: int) -> tuple[Decimal, bool]:
+    """
+    Calcula el precio unitario considerando:
+    1. Liquidación de fin de temporada (is_clearance) con discount_percentage (ej. 40% o 60%).
+    2. Precio al por mayor si quantity >= product.wholesale_min_quantity y wholesale_price está definido.
+    3. Precio unitario regular por menor (product.price).
+    Retorna: (precio_final, es_precio_mayorista)
+    """
+    base_price = product.price
+    # 1. Liquidación fin de temporada (recuperación de capital según audio)
+    if getattr(product, "is_clearance", False) and getattr(product, "discount_percentage", Decimal("0.00")) > Decimal("0.00"):
+        factor = Decimal("1.00") - (Decimal(str(product.discount_percentage)) / Decimal("100.00"))
+        base_price = (base_price * factor).quantize(Decimal("0.01"))
+
+    # 2. Precio al por mayor por volumen automático (ej. a partir de 3 prendas)
+    wholesale_price = getattr(product, "wholesale_price", None)
+    min_qty = getattr(product, "wholesale_min_quantity", 3) or 3
+    if wholesale_price is not None and quantity >= min_qty:
+        return (wholesale_price, True)
+
+    return (base_price, False)
 
 
 def get_or_create_cart(db: Session, user_id: int) -> Cart:
@@ -79,6 +116,10 @@ def get_cart(db: Session, user_id: int) -> CartResponse:
     for ci in cart.items:
         variant = ci.stock.variant
         product = variant.product
+        # Recalcular precio unitario automáticamente según volumen acumulado
+        computed_price, is_ws = calculate_item_unit_price(product, ci.quantity)
+        if ci.price != computed_price:
+            ci.price = computed_price
         total += ci.price * ci.quantity
         items.append(
             CartItemResponse(
@@ -86,6 +127,8 @@ def get_cart(db: Session, user_id: int) -> CartResponse:
                 stock_id=ci.stock_id,
                 quantity=ci.quantity,
                 price=ci.price,
+                is_wholesale_applied=is_ws,
+                wholesale_min_qty=getattr(product, "wholesale_min_quantity", 3) or 3,
                 variant_id=variant.id,
                 product_id=product.id,
                 product_name=product.name,
@@ -93,6 +136,7 @@ def get_cart(db: Session, user_id: int) -> CartResponse:
                 color=variant.color.name if variant.color else None,
             )
         )
+    db.commit()
     return CartResponse(id=cart.id, status=cart.status, items=items, total=total)
 
 
@@ -101,16 +145,23 @@ def add_to_cart(db: Session, user_id: int, data: CartItemRequest) -> CartRespons
     available = stock.physical_stock - stock.reserved_stock
     if available <= 0:
         raise HTTPException(409, "Stock not available")
+    user = db.get(User, user_id)
+    if user and user.tenant_id is not None and stock.variant.product.tenant_id != user.tenant_id:
+        raise HTTPException(403, "Product does not belong to user tenant")
     cart = get_or_create_cart(db, user_id)
     existing = next((i for i in cart.items if i.stock_id == data.stock_id), None)
     quantity = data.quantity + (existing.quantity if existing else 0)
     if quantity > available:
         raise HTTPException(409, "Requested quantity exceeds available stock")
+    
+    product = stock.variant.product
+    unit_price, _ = calculate_item_unit_price(product, quantity)
     if existing:
         existing.quantity = quantity
+        existing.price = unit_price
     else:
         cart.items.append(
-            CartItem(stock_id=data.stock_id, quantity=data.quantity, price=stock.variant.product.price)
+            CartItem(stock_id=data.stock_id, quantity=data.quantity, price=unit_price)
         )
     db.commit()
     return get_cart(db, user_id)
@@ -124,6 +175,9 @@ def update_cart_item(db: Session, user_id: int, item_id: int, quantity: int) -> 
     if quantity > (item.stock.physical_stock - item.stock.reserved_stock):
         raise HTTPException(409, "Requested quantity exceeds available stock")
     item.quantity = quantity
+    product = item.stock.variant.product
+    unit_price, _ = calculate_item_unit_price(product, quantity)
+    item.price = unit_price
     db.commit()
     return get_cart(db, user_id)
 
@@ -139,8 +193,17 @@ def remove_cart_item(db: Session, user_id: int, item_id: int) -> CartResponse:
 
 
 def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
-    if db.get(Branch, data.branch_id) is None:
+    branch = db.get(Branch, data.branch_id)
+    if branch is None:
         raise HTTPException(404, "Branch not found")
+    if branch.tenant and branch.tenant.status == "Suspendido":
+        raise HTTPException(
+            status_code=403,
+            detail="Operación bloqueada: La empresa se encuentra suspendida por falta de pago de suscripción SaaS.",
+        )
+    user = db.get(User, user_id)
+    if user and user.tenant_id is not None and branch.tenant_id != user.tenant_id:
+        raise HTTPException(403, "Branch does not belong to user tenant")
     cart = db.scalar(
         select(Cart).where(Cart.user_id == user_id, Cart.status == "activo").with_for_update()
     ) or get_or_create_cart(db, user_id)
@@ -154,7 +217,16 @@ def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
             raise HTTPException(409, f"Insufficient stock for {ci.stock_id}")
         locked_items.append((ci, stock))
         total += ci.price * ci.quantity
-    sale = Sale(client_id=user_id, user_id=user_id, branch_id=data.branch_id, total=total, sale_type="digital")
+    sale = Sale(
+        tenant_id=branch.tenant_id,
+        client_id=user_id,
+        user_id=user_id,
+        branch_id=data.branch_id,
+        total=total,
+        sale_type="digital",
+        tax_id=data.tax_id or "0",
+        business_name=data.business_name or "Consumidor Final",
+    )
     db.add(sale)
     db.flush()
     provider = get_payment_provider(data.payment_provider)
@@ -191,9 +263,26 @@ def checkout(db: Session, user_id: int, data: CheckoutRequest) -> Sale:
             stock.physical_stock -= ci.quantity
             sale.items.append(SaleItem(stock_id=ci.stock_id, quantity=ci.quantity, unit_price=ci.price))
             db.add(InventoryMovement(movement_type=MovementType.VENTA, inventory_id=stock.id, quantity=-ci.quantity, reason="Venta digital"))
+            if stock.physical_stock <= 2:
+                _notify_critical_stock(db, branch, stock)
         cart.status = "completado"
         db.commit()
         db.refresh(sale)
+        # Notificaciones coherentes para cada actor
+        try:
+            from app.services.notification_service import notify_online_checkout
+            notify_online_checkout(
+                db=db,
+                sale=sale,
+                branch=branch,
+                client=user,
+                total=total,
+                invoice_number=f"FAC-{sale.id:012d}",
+            )
+            db.commit()
+        except Exception:
+            pass
+
         # Notificación exitosa
         get_notification_provider().send(
             event="sale.completed",
@@ -319,10 +408,12 @@ def sale_lines(db: Session, sale_id: int) -> list[dict]:
     return lines
 
 
-def list_sales(db: Session, client_id: int | None = None) -> list[SaleResponse]:
+def list_sales(db: Session, client_id: int | None = None, tenant_id: int | None = None) -> list[SaleResponse]:
     q = select(Sale).order_by(Sale.sale_date.desc(), Sale.id)
     if client_id is not None:
         q = q.where(Sale.client_id == client_id)
+    if tenant_id is not None:
+        q = q.where(Sale.tenant_id == tenant_id)
     return [sale_response(db, sale) for sale in db.scalars(q).all()]
 
 
@@ -351,7 +442,10 @@ def sale_items(db: Session, sale: Sale) -> list[SaleItemResponse]:
 
 
 def sale_response(db: Session, sale: Sale) -> SaleResponse:
-    """Venta lista para el cliente: líneas legibles y pagos."""
+    """Venta lista para el cliente: líneas legibles, pagos y estado de despacho."""
+    st = sale.sale_type or "pos"
+    if st not in ("digital", "pos"):
+        st = "digital" if "digital" in str(st).lower() else "pos"
     return SaleResponse(
         id=sale.id,
         client_id=sale.client_id,
@@ -359,20 +453,31 @@ def sale_response(db: Session, sale: Sale) -> SaleResponse:
         branch_id=sale.branch_id,
         sale_date=sale.sale_date,
         total=sale.total,
-        sale_type=sale.sale_type,
+        sale_type=st,
+        sync_status=getattr(sale, "sync_status", "CONFIRMADO") or "CONFIRMADO",
+        offline_uuid=getattr(sale, "offline_uuid", None),
+        delivery_status=getattr(sale, "delivery_status", "PAGADO") or "PAGADO",
+        customer_notes=getattr(sale, "customer_notes", None),
+        tax_id=getattr(sale, "tax_id", None) or "0",
+        business_name=getattr(sale, "business_name", None) or "Consumidor Final",
+        delivered_at=getattr(sale, "delivered_at", None),
         items=sale_items(db, sale),
         payments=[SalePaymentResponse.model_validate(p) for p in sale.payments],
     )
 
 
 def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
-    if db.get(Branch, data.branch_id) is None:
+    branch = db.get(Branch, data.branch_id)
+    if branch is None:
         raise HTTPException(404, "Branch not found")
+    if branch.tenant and branch.tenant.status == "Suspendido":
+        raise HTTPException(
+            status_code=403,
+            detail="Operación bloqueada: La empresa se encuentra suspendida por falta de pago de suscripción SaaS.",
+        )
     client = db.get(User, data.client_id)
     if client is None:
         raise HTTPException(404, "Client not found")
-    if client.role != Role.CLIENTE:
-        raise HTTPException(422, "POS sales require a client user")
     total = Decimal("0")
     entries = []
     for inp in data.items:
@@ -381,7 +486,8 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
             raise HTTPException(422, f"Stock {inp.stock_id} does not belong to the sale branch")
         if inp.quantity > (stock.physical_stock - stock.reserved_stock):
             raise HTTPException(409, f"Insufficient available stock for {inp.stock_id}")
-        unit_price = stock.variant.product.price
+        product = stock.variant.product
+        unit_price, _ = calculate_item_unit_price(product, inp.quantity)
         total += unit_price * inp.quantity
         entries.append((stock, inp.quantity, unit_price))
     if total <= 0:
@@ -389,7 +495,16 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
     requested_status = data.payment_status or (
         PaymentStatus.COMPLETADO if data.paid else PaymentStatus.PENDIENTE
     )
-    sale = Sale(client_id=data.client_id, user_id=user_id, branch_id=data.branch_id, total=total, sale_type="pos")
+    sale = Sale(
+        tenant_id=branch.tenant_id,
+        client_id=data.client_id,
+        user_id=user_id,
+        branch_id=data.branch_id,
+        total=total,
+        sale_type="pos",
+        tax_id=data.tax_id or "0",
+        business_name=data.business_name or "Consumidor Final",
+    )
     db.add(sale)
     db.flush()
     provider_name = (data.payment_provider or settings.payment_provider).casefold()
@@ -430,18 +545,41 @@ def pos_sale(db: Session, user_id: int, data: PosSaleCreate) -> Sale:
                 reason="Venta POS",
             )
         )
+        if stock.physical_stock <= 2:
+            _notify_critical_stock(db, branch, stock)
     db.add(sale)
     db.flush()
     if sale.payments[0].reference is None:
         sale.payments[0].reference = f"POS-{sale.id:012d}"
     db.commit()
     db.refresh(sale)
+
+    # Notificaciones coherentes para cada actor (Cajero, Cliente, Administrador)
+    try:
+        from app.services.notification_service import notify_pos_sale
+        cashier = db.get(User, user_id)
+        notify_pos_sale(
+            db=db,
+            sale=sale,
+            branch=branch,
+            cashier=cashier,
+            client=client,
+            total=total,
+        )
+        db.commit()
+    except Exception:
+        pass
+
     return sale
 
 
 def create_reservation(db: Session, user_id: int, data: ReservationCreate) -> Reservation:
-    if db.get(Branch, data.branch_id) is None:
+    branch = db.get(Branch, data.branch_id)
+    if branch is None:
         raise HTTPException(404, "Branch not found")
+    user = db.get(User, user_id)
+    if user and user.tenant_id is not None and branch.tenant_id != user.tenant_id:
+        raise HTTPException(403, "Branch does not belong to user tenant")
     entries = []
     requested: dict[int, int] = {}
     for inp in data.items:
@@ -466,6 +604,7 @@ def create_reservation(db: Session, user_id: int, data: ReservationCreate) -> Re
             raise HTTPException(409, "Stock already reserved for this branch and time")
     entries = [(_stock(db, stock_id), quantity) for stock_id, quantity in requested.items()]
     reservation = Reservation(
+        tenant_id=branch.tenant_id,
         client_id=user_id,
         branch_id=data.branch_id,
         reservation_date=data.reservation_date,
@@ -486,6 +625,15 @@ def create_reservation(db: Session, user_id: int, data: ReservationCreate) -> Re
     db.add(reservation)
     db.commit()
     db.refresh(reservation)
+
+    # Notificaciones coherentes de reserva (Cliente, Encargado, Cajero)
+    try:
+        from app.services.notification_service import notify_reservation_created
+        notify_reservation_created(db=db, reservation=reservation, branch=branch, client=user)
+        db.commit()
+    except Exception:
+        pass
+
     return reservation
 
 
@@ -502,6 +650,7 @@ def list_reservations(
     status: str | None = None,
     branch_id: int | None = None,
     reservation_date=None,
+    tenant_id: int | None = None,
 ) -> list[Reservation]:
     q = select(Reservation).order_by(Reservation.reservation_date.desc(), Reservation.reservation_time)
     if client_id is not None:
@@ -512,6 +661,8 @@ def list_reservations(
         q = q.where(Reservation.branch_id == branch_id)
     if reservation_date is not None:
         q = q.where(Reservation.reservation_date == reservation_date)
+    if tenant_id is not None:
+        q = q.where(Reservation.tenant_id == tenant_id)
     return list(db.scalars(q).all())
 
 
@@ -617,9 +768,171 @@ def get_receipt(db: Session, sale_id: int) -> ReceiptResponse:
     sale = get_sale(db, sale_id)
     status = sale.payments[-1].status if sale.payments else PaymentStatus.PENDIENTE.value
     return ReceiptResponse(
-        sale_id=sale.id, receipt_number=f"REC-{sale.id:012d}",
-        invoice_number=f"FAC-{sale.id:012d}", sale_date=sale.sale_date,
-        sale_type=sale.sale_type, branch_id=sale.branch_id, client_id=sale.client_id,
-        subtotal=sale.total, total=sale.total, payment_status=status,
-        items=[{"id": i.id, "stock_id": i.stock_id, "quantity": i.quantity, "unit_price": i.unit_price} for i in sale.items],
+        sale_id=sale.id,
+        receipt_number=f"REC-{sale.id:012d}",
+        invoice_number=f"FAC-{sale.id:012d}",
+        sale_date=sale.sale_date,
+        sale_type=sale.sale_type,
+        branch_id=sale.branch_id,
+        client_id=sale.client_id,
+        tax_id=getattr(sale, "tax_id", None) or "0",
+        business_name=getattr(sale, "business_name", None) or "Consumidor Final",
+        subtotal=sale.total,
+        total=sale.total,
+        payment_status=status,
+        items=sale_items(db, sale),
     )
+
+
+def cancel_reservation(db: Session, reservation_id: int) -> Reservation:
+    """Cancela una reserva y libera de inmediato el stock reservado para venta disponible."""
+    reservation = get_reservation(db, reservation_id)
+    if reservation.status in ("cancelada", "completada"):
+        raise HTTPException(status_code=400, detail=f"No se puede cancelar una reserva en estado '{reservation.status}'")
+    _release_reserved(db, reservation)
+    reservation.status = "cancelada"
+    db.commit()
+    db.refresh(reservation)
+    return reservation
+
+
+def convert_reservation_to_sale(
+    db: Session, reservation_id: int, cashier_id: int, payment_provider: str = "efectivo"
+) -> Sale:
+    """
+    Convierte una reserva activa en una venta formal de contado cuando el cliente se presenta en tienda.
+    Descuenta definitivamente el stock físico y libera la reserva.
+    """
+    reservation = get_reservation(db, reservation_id)
+    if reservation.status in ("cancelada", "completada"):
+        raise HTTPException(status_code=400, detail=f"Reserva en estado '{reservation.status}' no puede convertirse a venta")
+
+    if reservation.branch and reservation.branch.tenant and reservation.branch.tenant.status == "Suspendido":
+        raise HTTPException(
+            status_code=403,
+            detail="Operación bloqueada: La empresa se encuentra suspendida por falta de pago de suscripción SaaS.",
+        )
+
+    now = datetime.now(timezone.utc)
+    # Consumir el stock reservado
+    _consume_reserved(db, reservation)
+    _release_reserved(db, reservation)
+    reservation.status = "completada"
+    reservation.checked_out_at = now
+
+    # Calcular total y crear items de venta
+    total = Decimal("0.00")
+    sale_items_list: list[SaleItem] = []
+    for item in reservation.items:
+        stock = db.get(Stock, item.stock_id)
+        unit_price = stock.variant.price if stock and stock.variant else Decimal("0.00")
+        line_total = unit_price * item.quantity
+        total += line_total
+        sale_items_list.append(
+            SaleItem(stock_id=item.stock_id, quantity=item.quantity, unit_price=unit_price)
+        )
+        if stock and stock.physical_stock <= 2:
+            _notify_critical_stock(db, reservation.branch, stock)
+
+    client_user = db.get(User, reservation.client_id)
+    business_name = client_user.full_name if client_user else "Consumidor Final"
+
+    sale = Sale(
+        client_id=reservation.client_id,
+        user_id=cashier_id,
+        branch_id=reservation.branch_id,
+        tenant_id=reservation.tenant_id,
+        sale_date=now,
+        total=total,
+        sale_type="Reserva Entregada (Contado)",
+        tax_id="0",
+        business_name=business_name,
+        items=sale_items_list,
+        payments=[
+            SalePayment(
+                amount=total,
+                status=PaymentStatus.COMPLETADO.value,
+                paid_at=now,
+                reference=f"RES-{reservation.id:08d}-SALE",
+            )
+        ],
+    )
+    db.add(sale)
+    db.commit()
+    db.refresh(sale)
+    return sale
+
+
+def update_delivery_status(db: Session, sale_id: int, delivery_status: str, notes: str | None = None) -> Sale:
+    """
+    Actualiza el estado de logística/entrega de la venta (RN audio: Pagado -> Por despachar -> Enviado -> Entregado).
+    """
+    valid_statuses = {"PAGADO", "POR_DESPACHAR", "ENVIADO", "ENTREGADO_CONFORME"}
+    status_upper = delivery_status.upper().strip()
+    if status_upper not in valid_statuses:
+        raise HTTPException(400, f"Estado de entrega inválido. Valores permitidos: {', '.join(valid_statuses)}")
+    sale = db.get(Sale, sale_id)
+    if not sale:
+        raise HTTPException(404, "Venta no encontrada")
+    sale.delivery_status = status_upper
+    if notes:
+        sale.customer_notes = notes
+    if status_upper == "ENTREGADO_CONFORME" and not sale.delivered_at:
+        sale.delivered_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(sale)
+    return sale
+
+
+def confirm_customer_delivery(db: Session, sale_id: int, client_id: int, notes: str | None = None) -> Sale:
+    """
+    Permite al cliente confirmar en la app o web la recepción conforme de la prenda entregada.
+    """
+    sale = db.get(Sale, sale_id)
+    if not sale:
+        raise HTTPException(404, "Venta no encontrada")
+    if sale.client_id != client_id:
+        raise HTTPException(403, "No tiene permisos para confirmar la entrega de una compra de otro cliente")
+    sale.delivery_status = "ENTREGADO_CONFORME"
+    sale.delivered_at = datetime.now(timezone.utc)
+    if notes:
+        sale.customer_notes = f"Conformidad del cliente: {notes}"
+    db.commit()
+    db.refresh(sale)
+    return sale
+
+
+def record_cash_close(
+    db: Session,
+    branch_id: int,
+    cashier_user_id: int,
+    total_sales: Decimal,
+    sales_count: int,
+    diff: Decimal,
+    status_text: str,
+) -> dict:
+    """Registra y notifica el cierre de turno y arqueo de caja POS."""
+    branch = db.get(Branch, branch_id)
+    if not branch:
+        raise HTTPException(404, "Branch not found")
+    cashier = db.get(User, cashier_user_id)
+
+    from app.services.notification_service import notify_cash_close
+    notify_cash_close(
+        db=db,
+        branch=branch,
+        cashier=cashier,
+        total_sales=total_sales,
+        sales_count=sales_count,
+        diff=diff,
+        status_text=status_text,
+    )
+    db.commit()
+    now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")
+    return {
+        "status": "ok",
+        "message": "Cierre de caja y arqueo registrado exitosamente",
+        "branch_id": branch_id,
+        "total_sales": total_sales,
+        "closed_at": now_str,
+    }

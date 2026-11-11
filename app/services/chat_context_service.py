@@ -51,9 +51,9 @@ SYSTEM_PROMPT = (
 
 
 def _money(value) -> str:
-    """Importe en el formato de la app: $85.000 (sin decimales, separador de miles con punto)."""
+    """Importe en el formato de la app en Bolivianos: Bs. 250.00."""
     amount = Decimal(value or 0)
-    return "$" + f"{amount:,.0f}".replace(",", ".")
+    return f"Bs. {amount:,.2f}"
 
 
 def _clip(text, limit: int = MAX_TEXT) -> str:
@@ -140,16 +140,20 @@ def _sizes_by_product(db: Session, product_ids: list[int], limit: int = MAX_SIZE
     return grouped
 
 
-def _available_products(db: Session, limit: int = MAX_PRODUCTS) -> list[dict]:
+def _available_products(db: Session, limit: int = MAX_PRODUCTS, tenant_id: int | None = None) -> list[dict]:
     """Prendas con stock disponible: el diseño condiciona la sugerencia a la disponibilidad."""
     availability = Stock.physical_stock - Stock.reserved_stock
-    rows = db.execute(
+    stmt = (
         select(Product, Category.name, func.sum(availability).label("available"))
         .join(ProductVariant, ProductVariant.product_id == Product.id)
         .join(Stock, Stock.variant_id == ProductVariant.id)
         .join(Category, Category.id == Product.category_id)
         .where(Product.is_active.is_(True))
-        .group_by(Product.id, Category.name)
+    )
+    if tenant_id is not None:
+        stmt = stmt.where(Product.tenant_id == tenant_id)
+    rows = db.execute(
+        stmt.group_by(Product.id, Category.name)
         .having(func.sum(availability) > 0)
         .order_by(func.sum(availability).desc(), Product.id)
         .limit(limit)
@@ -176,14 +180,18 @@ def _promotion_label(promotion: Promotion) -> str:
     return _money(value)
 
 
-def _active_promotions(db: Session, limit: int = MAX_PROMOTIONS) -> list[dict]:
+def _active_promotions(db: Session, limit: int = MAX_PROMOTIONS, tenant_id: int | None = None) -> list[dict]:
     today = date.today()
-    rows = db.scalars(
+    stmt = (
         select(Promotion)
         .where(Promotion.is_active.is_(True))
         .where((Promotion.start_date.is_(None)) | (Promotion.start_date <= today))
         .where((Promotion.end_date.is_(None)) | (Promotion.end_date >= today))
-        .order_by(Promotion.discount_value.desc(), Promotion.id)
+    )
+    if tenant_id is not None:
+        stmt = stmt.where(Promotion.tenant_id == tenant_id)
+    rows = db.scalars(
+        stmt.order_by(Promotion.discount_value.desc(), Promotion.id)
         .limit(limit)
     ).all()
     return [
@@ -260,6 +268,7 @@ def build_chat_context(
     no crezca con el historial del cliente.
     """
     client_id = conversation.user_id
+    tenant_id = getattr(user, "tenant_id", None)
     orders, total_orders, total_spent = _recent_orders(db, client_id)
     payload = extra or conversation.context
     return {
@@ -269,8 +278,8 @@ def build_chat_context(
             "total_spent": total_spent,
         },
         "orders": orders,
-        "products": _available_products(db),
-        "promotions": _active_promotions(db),
+        "products": _available_products(db, tenant_id=tenant_id),
+        "promotions": _active_promotions(db, tenant_id=tenant_id),
         "reservations": _open_reservations(db, client_id),
         "preferences": _preferences(db, client_id),
         "history": _history(conversation),

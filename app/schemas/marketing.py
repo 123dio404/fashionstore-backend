@@ -13,6 +13,7 @@ class CollectionCreate(BaseModel):
 class CollectionResponse(CollectionCreate):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    tenant_id: int | None = None
     created_at: datetime
     product_ids: list[int] = []
 
@@ -20,7 +21,7 @@ class CollectionResponse(CollectionCreate):
 class PromotionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     description: str | None = None
-    discount_type: str = Field(default="percentage", pattern="^(percentage|fixed)$")
+    discount_type: str = Field(default="percentage", pattern="^(percentage|fixed|porcentaje|monto_fijo)$")
     discount_value: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
     start_date: date | None = None
     end_date: date | None = None
@@ -39,4 +40,5 @@ class PromotionCreate(BaseModel):
 class PromotionResponse(PromotionCreate):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    tenant_id: int | None = None
     product_ids: list[int] = []

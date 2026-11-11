@@ -21,13 +21,15 @@ def _date_range(start_date, end_date):
     return start, end
 
 
-def purchase_history(db: Session, client_id: int, start_date=None, end_date=None):
+def purchase_history(db: Session, client_id: int, start_date=None, end_date=None, tenant_id: int | None = None):
     query = (
         select(Sale)
         .options(selectinload(Sale.items).selectinload(SaleItem.stock).selectinload(Stock.variant).selectinload(ProductVariant.product))
         .where(Sale.client_id == client_id)
         .order_by(Sale.sale_date.desc())
     )
+    if tenant_id is not None:
+        query = query.where(Sale.tenant_id == tenant_id)
     if start_date is not None:
         query = query.where(Sale.sale_date >= start_date)
     if end_date is not None:
@@ -64,11 +66,16 @@ def purchase_history(db: Session, client_id: int, start_date=None, end_date=None
     }
 
 
-def sales_report(db: Session, start_date=None, end_date=None):
+def sales_report(db: Session, start_date=None, end_date=None, tenant_id: int | None = None):
     start, end = _date_range(start_date, end_date)
-    sales = db.scalars(
-        select(Sale).options(selectinload(Sale.items)).where(Sale.sale_date.between(start, end))
-    ).all()
+    query = (
+        select(Sale)
+        .options(selectinload(Sale.items))
+        .where(Sale.sale_date.between(start, end))
+    )
+    if tenant_id is not None:
+        query = query.where(Sale.tenant_id == tenant_id)
+    sales = db.scalars(query).all()
     groups = {name: defaultdict(lambda: {"orders": 0, "units": 0, "revenue": Decimal("0")})
               for name in ("channel", "branch", "day")}
     for sale in sales:
@@ -92,10 +99,17 @@ def sales_report(db: Session, start_date=None, end_date=None):
     }
 
 
-def inventory_report(db: Session):
-    stocks = db.scalars(
-        select(Stock).options(selectinload(Stock.variant).selectinload(ProductVariant.product)).order_by(Stock.id)
-    ).all()
+def inventory_report(db: Session, tenant_id: int | None = None):
+    query = (
+        select(Stock)
+        .join(ProductVariant, ProductVariant.id == Stock.variant_id)
+        .join(Product, Product.id == ProductVariant.product_id)
+        .options(selectinload(Stock.variant).selectinload(ProductVariant.product))
+        .order_by(Stock.id)
+    )
+    if tenant_id is not None:
+        query = query.where(Product.tenant_id == tenant_id)
+    stocks = db.scalars(query).all()
     rows = []
     for stock in stocks:
         product = stock.variant.product
@@ -116,11 +130,11 @@ def inventory_report(db: Session):
     }
 
 
-def dashboard(db: Session, start_date=None, end_date=None):
-    sales = sales_report(db, start_date, end_date)
-    inventory = inventory_report(db)
+def dashboard(db: Session, start_date=None, end_date=None, tenant_id: int | None = None):
+    sales = sales_report(db, start_date, end_date, tenant_id)
+    inventory = inventory_report(db, tenant_id)
     top = defaultdict(lambda: {"product_id": 0, "product_name": "", "units": 0, "revenue": Decimal("0")})
-    result = db.execute(
+    query = (
         select(Product.id, Product.name, SaleItem.quantity, SaleItem.unit_price)
         .join(ProductVariant, ProductVariant.product_id == Product.id)
         .join(Stock, Stock.variant_id == ProductVariant.id)
@@ -128,12 +142,18 @@ def dashboard(db: Session, start_date=None, end_date=None):
         .join(Sale, Sale.id == SaleItem.sale_id)
         .where(Sale.sale_date.between(sales["start_date"], sales["end_date"]))
     )
+    if tenant_id is not None:
+        query = query.where(Product.tenant_id == tenant_id, Sale.tenant_id == tenant_id)
+    result = db.execute(query)
     for product_id, name, quantity, unit_price in result:
         row = top[product_id]
         row.update(product_id=product_id, product_name=name)
         row["units"] += quantity
         row["revenue"] += quantity * unit_price
-    prices = {product.id: product.price for product in db.scalars(select(Product)).all()}
+    prices_query = select(Product)
+    if tenant_id is not None:
+        prices_query = prices_query.where(Product.tenant_id == tenant_id)
+    prices = {product.id: product.price for product in db.scalars(prices_query).all()}
     return {
         **{key: sales[key] for key in ("start_date", "end_date", "total_orders", "total_units", "total_revenue", "average_order_value")},
         "low_stock_count": inventory["low_stock_count"],
@@ -143,42 +163,46 @@ def dashboard(db: Session, start_date=None, end_date=None):
     }
 
 
-def analytical_query(db: Session, query: str, client_id=None, start_date=None, end_date=None, audio=None):
+def analytical_query(db: Session, query: str, client_id=None, start_date=None, end_date=None, audio=None, tenant_id: int | None = None):
     normalized = query.casefold()
     parameters = {"client_id": client_id, "start_date": start_date, "end_date": end_date}
     if audio is not None:
         parameters["audio"] = audio
     provider = get_ai_provider()
     if provider.__class__.__name__ != "DisabledAIProvider":
-        interpretation = provider.generate_json(
-            "Classify this FashionStore analytical query. Return JSON with intent equal to "
-            "one of inventory, purchase_history, dashboard, sales, and optional client_id. "
-            f"Query: {query}"
-        )
-        intent_hint = interpretation.get("intent", "sales")
-        if intent_hint == "purchase_history" and client_id is None:
-            client_id = interpretation.get("client_id")
-        normalized = intent_hint
+        try:
+            interpretation = provider.generate_json(
+                "Classify this FashionStore analytical query. Return JSON with intent equal to "
+                "one of inventory, purchase_history, dashboard, sales, and optional client_id. "
+                f"Query: {query}"
+            )
+            intent_hint = interpretation.get("intent", "sales")
+            if intent_hint == "purchase_history" and client_id is None:
+                client_id = interpretation.get("client_id")
+            if intent_hint in {"inventory", "purchase_history", "dashboard", "sales"}:
+                normalized = intent_hint
+        except Exception:
+            pass
     if normalized in {"inventory", "purchase_history", "dashboard", "sales"}:
         intent = normalized
         if intent == "inventory":
-            result = inventory_report(db)
+            result = inventory_report(db, tenant_id)
         elif intent == "purchase_history":
             if client_id is None:
                 raise HTTPException(422, "client_id is required for purchase history queries")
-            result = purchase_history(db, client_id, start_date, end_date)
+            result = purchase_history(db, client_id, start_date, end_date, tenant_id)
         elif intent == "dashboard":
-            result = dashboard(db, start_date, end_date)
+            result = dashboard(db, start_date, end_date, tenant_id)
         else:
-            result = sales_report(db, start_date, end_date)
+            result = sales_report(db, start_date, end_date, tenant_id)
     elif re.search(r"\b(inventario|stock|existencias|inventory)\b", normalized):
-        intent, result = "inventory", inventory_report(db)
+        intent, result = "inventory", inventory_report(db, tenant_id)
     elif re.search(r"\b(historial|compras|compr[ée])\b", normalized):
         if client_id is None:
             raise HTTPException(422, "client_id is required for purchase history queries")
-        intent, result = "purchase_history", purchase_history(db, client_id, start_date, end_date)
+        intent, result = "purchase_history", purchase_history(db, client_id, start_date, end_date, tenant_id)
     elif re.search(r"\b(dashboard|ejecutiv|resumen)\b", normalized):
-        intent, result = "dashboard", dashboard(db, start_date, end_date)
+        intent, result = "dashboard", dashboard(db, start_date, end_date, tenant_id)
     else:
-        intent, result = "sales", sales_report(db, start_date, end_date)
+        intent, result = "sales", sales_report(db, start_date, end_date, tenant_id)
     return {"query": query, "intent": intent, "parameters": parameters, "result": result}

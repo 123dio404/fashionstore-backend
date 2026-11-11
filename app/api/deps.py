@@ -8,6 +8,7 @@ from app.core.security import decode_access_token
 from app.models.user import Role, User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/api/v1/auth/login')
+oauth2_optional = OAuth2PasswordBearer(tokenUrl='/api/v1/auth/login', auto_error=False)
 
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
@@ -36,3 +37,81 @@ def require_role(*roles: Role | str) -> Callable:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Insufficient permissions')
         return current_user
     return dependency
+
+def get_current_tenant_id(current_user: User = Depends(get_current_user)) -> int | None:
+    """Retorna el ID de la empresa a la que pertenece el usuario autenticado (o None si es Superadmin)."""
+    return current_user.tenant_id
+
+
+def get_optional_current_user(
+    token: str | None = Depends(oauth2_optional),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Usuario autenticado si viene un token válido; None para endpoints públicos.
+
+    Permite que el catálogo sea público pero que, cuando un usuario de una
+    empresa consulta, solo vea los datos de su propio tenant.
+    """
+    if not token:
+        return None
+    try:
+        payload = decode_access_token(token)
+        subject = payload.get('sub')
+        if not subject:
+            return None
+        user = db.get(User, int(subject))
+    except (JWTError, ValueError, TypeError):
+        return None
+    if user is None or not user.is_active:
+        return None
+    return user
+
+def require_tenant(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> int:
+    """Exige que el usuario pertenezca a un tenant específico para operaciones comerciales o administrativas."""
+    if current_user.tenant_id is not None:
+        return current_user.tenant_id
+    # Fallback para cuentas globales de administración / superadmin en demostraciones
+    from app.models.tenant import Tenant
+    first_tenant = db.query(Tenant).filter(Tenant.is_active == True).order_by(Tenant.id).first()
+    if first_tenant:
+        return first_tenant.id
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Operación requiere pertenecer a una empresa contratante (tenant)"
+    )
+
+def require_ai_plan(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Verifica que la empresa del usuario tenga una suscripción activa con reportes IA y ML habilitados."""
+    from app.models.tenant import Subscription, Tenant
+    if current_user.role == Role.SUPERADMIN and current_user.tenant_id is None:
+        return None
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        first_tenant = db.query(Tenant).filter(Tenant.is_active == True).order_by(Tenant.id).first()
+        if first_tenant:
+            tenant_id = first_tenant.id
+        else:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario sin empresa asignada")
+    sub = db.query(Subscription).filter(
+        Subscription.tenant_id == tenant_id,
+        Subscription.status == "Activa"
+    ).first()
+    if not sub or not sub.plan:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Su empresa no cuenta con una suscripción activa para generar reportes IA."
+        )
+    if not sub.plan.has_ai_reports and current_user.role != Role.SUPERADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Función exclusiva: Su empresa cuenta actualmente con el Plan {sub.plan.name} (Bs. {sub.plan.monthly_price}/mes), "
+                "el cual no incluye Reportes Ejecutivos con IA ni Analítica Predictiva ML. "
+                "Actualice su suscripción al Plan Profesional (Bs. 69.99/mes) o Plan Empresarial (Bs. 129.99/mes) "
+                "desde el módulo 'Planes y Suscripción'."
+            )
+        )
+    return sub

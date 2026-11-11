@@ -49,6 +49,8 @@ class SimulatedFiscalProvider(FiscalProvider):
             "issuer_name": settings.fiscal_issuer_name,
             "issuer_tax_id": settings.fiscal_issuer_tax_id,
             "customer_id": sale.client_id,
+            "customer_tax_id": sale.tax_id or "0",
+            "customer_business_name": sale.business_name or "Consumidor Final",
             "tax_rate": rate,
             "subtotal": subtotal,
             "tax": tax,

@@ -6,6 +6,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.inventory import Stock
+    from app.models.tenant import Tenant
     from app.models.user import User
 
 
@@ -22,12 +23,14 @@ class Branch(Base):
     __tablename__ = "sucursal"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column("id_empresa", ForeignKey("empresa.id", ondelete="CASCADE"), nullable=True, index=True)
     city_id: Mapped[int] = mapped_column("id_ciudad", ForeignKey("ciudad.id", ondelete="RESTRICT"), index=True)
     name: Mapped[str] = mapped_column("nombre", String(100))
     address: Mapped[str] = mapped_column("direccion", String(255))
     phone: Mapped[str | None] = mapped_column("telefono", String(20), nullable=True)
     is_active: Mapped[bool] = mapped_column("estado", Boolean, default=True, nullable=False)
 
+    tenant: Mapped["Tenant | None"] = relationship(back_populates="branches")
     city: Mapped["City"] = relationship(back_populates="branches")
     hours: Mapped[list["BranchHour"]] = relationship(back_populates="branch", cascade="all, delete-orphan")
     stocks: Mapped[list["Stock"]] = relationship(back_populates="branch")

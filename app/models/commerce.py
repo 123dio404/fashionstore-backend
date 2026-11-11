@@ -44,12 +44,20 @@ class Sale(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column("id_empresa", ForeignKey("empresa.id", ondelete="CASCADE"), nullable=True, index=True)
+    offline_uuid: Mapped[str | None] = mapped_column("uuid_offline", String(36), unique=True, nullable=True, index=True)
+    sync_status: Mapped[str] = mapped_column("estado_sincronizacion", String(30), default="CONFIRMADO", nullable=False)
     client_id: Mapped[int] = mapped_column("id_cliente", ForeignKey("usuario.id", ondelete="RESTRICT"))
     user_id: Mapped[int | None] = mapped_column("id_usuario", ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
     branch_id: Mapped[int] = mapped_column("id_sucursal", ForeignKey("sucursal.id", ondelete="RESTRICT"))
     sale_date: Mapped[datetime] = mapped_column("fecha", DateTime(timezone=True), server_default=func.now(), nullable=False)
     total: Mapped[Decimal] = mapped_column("total", Numeric(12, 2), nullable=False)
     sale_type: Mapped[str] = mapped_column("tipo_venta", String(30), nullable=False)
+    delivery_status: Mapped[str] = mapped_column("estado_entrega", String(30), default="PAGADO", nullable=False)
+    customer_notes: Mapped[str | None] = mapped_column("notas_cliente", String(255), nullable=True)
+    tax_id: Mapped[str | None] = mapped_column("nit_cliente", String(50), nullable=True)
+    business_name: Mapped[str | None] = mapped_column("razon_social_cliente", String(150), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column("fecha_entrega", DateTime(timezone=True), nullable=True)
 
     branch: Mapped["Branch"] = relationship()
     items: Mapped[list["SaleItem"]] = relationship(back_populates="sale", cascade="all, delete-orphan")
@@ -86,6 +94,9 @@ class Reservation(Base):
     __tablename__ = "reserva"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column("id_empresa", ForeignKey("empresa.id", ondelete="CASCADE"), nullable=True, index=True)
+    offline_uuid: Mapped[str | None] = mapped_column("uuid_offline", String(36), unique=True, nullable=True, index=True)
+    sync_status: Mapped[str] = mapped_column("estado_sincronizacion", String(30), default="CONFIRMADO", nullable=False)
     client_id: Mapped[int] = mapped_column("id_cliente", ForeignKey("usuario.id", ondelete="RESTRICT"), index=True)
     branch_id: Mapped[int] = mapped_column("id_sucursal", ForeignKey("sucursal.id", ondelete="RESTRICT"))
     reservation_date: Mapped[date] = mapped_column("fecha_reserva", nullable=False, index=True)
